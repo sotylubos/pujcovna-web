@@ -19,7 +19,12 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,
 button,input,textarea,select{font:inherit}
 a{color:var(--green)}
 .top{position:sticky;top:0;z-index:5;background:var(--green);color:#fff;padding:calc(12px + env(safe-area-inset-top)) 16px 12px;display:flex;align-items:center;gap:12px}
-.top h1{margin:0;font-family:var(--head);font-weight:800;font-size:22px;letter-spacing:-.02em;flex:1}
+.top h1{margin:0;font-family:var(--head);font-weight:800;font-size:20px;letter-spacing:-.02em;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.cal .fab{display:none}
+body.cal main{padding-top:8px}
+body.cal .cal-wrap{padding:8px}
+body.cal .cal-nav{margin-bottom:4px}
+body.cal .cal-nav button{width:40px;height:40px}
 .top button{background:rgba(255,255,255,.14);color:#fff;border:0;border-radius:999px;min-height:40px;padding:0 14px;font-weight:600;cursor:pointer}
 main{max-width:760px;margin:0 auto;padding:16px}
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:5;background:#fff;border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);padding-bottom:env(safe-area-inset-bottom)}
@@ -75,16 +80,16 @@ table.tl td.lbl{background:none;font-weight:700;font-size:13px;white-space:nowra
 table.tl td.c{background:var(--green);cursor:pointer}
 table.tl td.p{background:var(--accent);cursor:pointer}
 table.tl td.t{box-shadow:inset 0 0 0 2px var(--ink)}
-.kgrid{display:flex;flex-direction:column;gap:2px}
-.kr{display:grid;grid-template-columns:44px repeat(var(--n),minmax(0,1fr));gap:2px;align-items:stretch}
+.kgrid{display:flex;flex-direction:column;gap:1px}
+.kr{display:grid;grid-template-columns:42px repeat(var(--n),minmax(0,1fr));gap:2px;align-items:stretch}
 .kr.we .kd{color:#8A2E0A}
 .kr.today .kd{background:var(--accent);color:var(--ink);border-radius:8px}
-.kh{position:sticky;top:64px;background:#fff;z-index:2;padding-bottom:4px}
+.kh{position:sticky;top:56px;background:#fff;z-index:2;padding-bottom:4px}
 .kh .kc{background:none;font-size:11px;font-weight:700;text-align:center;color:var(--ink);min-height:0;padding:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.kd{display:flex;align-items:baseline;gap:3px;padding:0 4px;font-size:12px;color:var(--muted);min-height:30px;align-items:center}
-.kd b{color:inherit;font-size:13px}
+.kd{display:flex;gap:3px;padding:0 4px;font-size:11px;color:var(--muted);min-height:19px;align-items:center}
+.kd b{color:inherit;font-size:12px}
 .kr.we .kd b,.kr.today .kd b{color:inherit}
-.kc{min-height:30px;background:var(--bg);border:0;padding:0 3px;font-size:10px;font-weight:700;color:#fff;text-align:left;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-family:inherit}
+.kc{min-height:19px;line-height:19px;background:var(--bg);border:0;padding:0 3px;font-size:10px;font-weight:700;color:#fff;text-align:left;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-family:inherit}
 .kc.on{background:var(--green);cursor:pointer}
 .kc.on.p{background:var(--accent);color:var(--ink)}
 .kc.on.r{background:#9DB5A8;color:var(--ink)}

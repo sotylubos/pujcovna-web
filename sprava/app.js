@@ -308,11 +308,11 @@ function viewKalendar() {
   }
   const head = `<div class="kr kh"><div class="kd"></div>${items.map((it) => `<div class="kc">${esc(SHORT[it.id] || it.short_name)}</div>`).join('')}</div>`;
   const monthRes = live.filter((x) => x.start_date <= iso(new Date(y, m, cnt)) && x.end_date >= iso(new Date(y, m, 1)));
-  return `<h2>Kalendář</h2><div class="cal-wrap">
+  return `<div class="cal-wrap">
     <div class="cal-nav"><button data-cal="-1" aria-label="Předchozí měsíc">‹</button><b>${MON[m]} ${y}</b><button data-cal="1" aria-label="Další měsíc">›</button></div>
     <div class="kgrid" style="--n:${items.length}">${head}${rows}</div>
-    <p class="muted" style="font-size:13px;margin:12px 0 0;display:flex;gap:14px;flex-wrap:wrap"><span><i class="lg" style="background:#1F4D3A"></i>potvrzeno</span><span><i class="lg" style="background:#FF7A3D"></i>čeká</span><span><i class="lg" style="background:#9DB5A8"></i>vráceno</span><span>Klepnutím otevřete</span></p></div>
-    <p class="muted" style="margin:14px 2px 0">Tento měsíc: <b style="color:var(--ink)">${monthRes.length}</b> rezervací</p>`;
+    <p class="muted" style="font-size:12px;margin:8px 0 0;display:flex;gap:14px;flex-wrap:wrap"><span><i class="lg" style="background:#1F4D3A"></i>potvrzeno</span><span><i class="lg" style="background:#FF7A3D"></i>čeká</span><span><i class="lg" style="background:#9DB5A8"></i>vráceno</span><span>Klepnutím otevřete</span></p></div>
+    <p class="muted" style="margin:10px 2px 0;font-size:13px">Tento měsíc: <b style="color:var(--ink)">${monthRes.length}</b> rezervací</p>`;
 }
 
 /* ---------- nová rezervace (telefonem) ---------- */
@@ -373,6 +373,7 @@ function render() {
     <button class="fab" id="add"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Rezervace</button>
     <nav class="tabs">${tabs}</nav>`;
   document.title = (pending ? `(${pending}) ` : '') + 'Správa – Půjčovna Žďár';
+  document.body.classList.toggle('cal', S.tab === 'kalendar');
 }
 app.addEventListener('click', async (e) => {
   const b = e.target.closest('button,[data-open]'); if (!b) return;
