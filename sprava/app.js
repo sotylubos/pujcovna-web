@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
+import QRCode from 'https://esm.sh/qrcode@1.5.4';
 
 const SB_URL = 'https://bnckyiveqebzzzxuoluj.supabase.co';
 const SB_KEY = 'sb_publishable_9-08pVFy82_mNy3rRVh-6w_gUZwOe3I';
@@ -6,7 +7,7 @@ const sb = createClient(SB_URL, SB_KEY, { auth: { persistSession: true, storageK
 
 const FIRM = { name: 'Půjčovna Žďár', owner: 'Lubomír Šotek', ico: '71391134', addr: 'Světnov 201, 591 02 Žďár nad Sázavou', phone: '+420 777 097 902', email: 'info@pujcovna-zdar.cz' };
 const app = document.getElementById('app');
-const S = { tab: 'poptavky', items: [], res: [], calY: 0, calM: 0, archive: 'vse', user: null };
+const S = { tab: 'poptavky', items: [], res: [], calY: 0, calM: 0, archive: 'vse', user: null, settings: {} };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const kc = (n) => String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' Kč';
@@ -56,10 +57,12 @@ function loginView() {
 /* ---------- data ---------- */
 async function load() {
   const since = iso(new Date(Date.now() - 400 * 86400000));
-  const [it, rs] = await Promise.all([
+  const [it, rs, st] = await Promise.all([
     sb.from('pj_items').select('*').order('sort'),
     sb.from('pj_reservations').select('*').gte('end_date', since).order('start_date'),
+    sb.from('pj_settings').select('key,value'),
   ]);
+  if (!st.error) { S.settings = {}; st.data.forEach((x) => (S.settings[x.key] = x.value)); }
   if (it.error || rs.error) { toast('Načtení se nepovedlo'); return; }
   S.items = it.data; S.res = rs.data;
 }
@@ -105,6 +108,64 @@ function mailSheet(r, kind, title) {
       closeSheet();
     };
     el.querySelector('#cp').onclick = () => navigator.clipboard.writeText(el.querySelector('#mb').value).then(() => toast('Zkopírováno'));
+  });
+}
+
+/* ---------- QR platba ---------- */
+function toIban(acc) {
+  const m = String(acc).replace(/\s/g, '').match(/^(?:(\d{1,6})-)?(\d{2,10})\/(\d{4})$/);
+  if (!m) return null;
+  const bban = m[3] + (m[1] || '').padStart(6, '0') + m[2].padStart(10, '0');
+  const check = 98n - (BigInt(bban + '123500') % 97n);
+  return 'CZ' + String(check).padStart(2, '0') + bban;
+}
+const ascii = (t) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[*]/g, '');
+function accountSheet(after) {
+  sheet(`<h3>Číslo účtu pro QR platby</h3>
+    <p class="muted" style="margin:0">Zadejte číslo účtu, na který mají zákazníci platit. Uloží se jen do vaší správy.</p>
+    <label class="f">Číslo účtu<input id="acc" inputmode="numeric" placeholder="např. 123456789/0800" value="${esc(S.settings.account || '')}"></label>
+    <div class="actions"><button class="btn primary" id="sv">Uložit</button><button class="btn ghost" data-close>Zrušit</button></div>`,
+  (el) => (el.querySelector('#sv').onclick = async () => {
+    const v = el.querySelector('#acc').value.trim();
+    if (!toIban(v)) return toast('Zkontrolujte formát, např. 123456789/0800');
+    const { error } = await sb.from('pj_settings').upsert({ key: 'account', value: v, updated_at: new Date().toISOString() });
+    if (error) return toast('Uložení se nepovedlo');
+    S.settings.account = v; closeSheet(); toast('Účet uložen'); after && after();
+  }));
+}
+function qrSheet(r) {
+  if (!S.settings.account || !toIban(S.settings.account)) return accountSheet(() => qrSheet(r));
+  const opts = [];
+  if (r.paid_status === 'unpaid') opts.push(['rent', 'Nájem', r.rent_amount]);
+  if (r.deposit_status === 'none') opts.push(['dep', 'Kauce', r.deposit_amount]);
+  if (opts.length === 2) opts.push(['both', 'Nájem + kauce', r.rent_amount + r.deposit_amount]);
+  if (!opts.length) opts.push(['rent', 'Nájem', r.rent_amount]);
+  sheet(`<h3>QR platba</h3>
+    <div class="seg" id="qs">${opts.map(([k, l, a], i) => `<button data-q="${k}" aria-pressed="${i === 0}">${l} · ${kc(a)}</button>`).join('')}</div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+      <img id="qimg" alt="QR kód k zaplacení" style="width:min(78vw,340px);height:auto;image-rendering:pixelated;background:#fff">
+      <b id="qamt" style="font-family:var(--head);font-size:30px"></b>
+      <span class="muted" style="font-size:14px">${esc(itemName(r.item_id))} · #${esc(r.code)} · účet ${esc(S.settings.account)}</span>
+    </div>
+    <div class="actions"><button class="btn primary" id="qpaid">Zaplaceno</button><button class="btn ghost" id="qacc">Změnit účet</button><button class="btn ghost" data-close>Zavřít</button></div>`,
+  (el) => {
+    let cur = opts[0];
+    const draw = async () => {
+      const spd = `SPD*1.0*ACC:${toIban(S.settings.account)}*AM:${cur[2].toFixed(2)}*CC:CZK*MSG:${ascii('Pujcovna Zdar ' + r.code + ' ' + cur[1]).slice(0, 60)}`;
+      el.querySelector('#qimg').src = await QRCode.toDataURL(spd, { margin: 2, width: 640, errorCorrectionLevel: 'M' });
+      el.querySelector('#qamt').textContent = kc(cur[2]);
+      el.querySelectorAll('[data-q]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.q === cur[0]));
+    };
+    el.querySelectorAll('[data-q]').forEach((b) => (b.onclick = () => { cur = opts.find((o) => o[0] === b.dataset.q); draw(); }));
+    el.querySelector('#qacc').onclick = () => accountSheet(() => qrSheet(r));
+    el.querySelector('#qpaid').onclick = async () => {
+      closeSheet();
+      const f = {}, now = new Date().toISOString();
+      if (cur[0] !== 'dep') { f.paid_status = 'qr_onsite'; f.paid_at = now; }
+      if (cur[0] !== 'rent') { f.deposit_status = 'received'; f.deposit_received_at = now; }
+      if (await patch(r, f, 'Zaplaceno QR') && cur[0] !== 'rent') mailSheet(r, 'depositIn', 'Poslat potvrzení o převzetí kauce');
+    };
+    draw();
   });
 }
 
@@ -159,6 +220,7 @@ const ACT = {
       done(v, w);
     };
   }),
+  qr: (r) => qrSheet(r),
   cancel: async (r) => { if (confirm('Zrušit tuto rezervaci?')) await patch(r, { status: 'cancelled' }, 'Zrušeno'); },
   mail: (r) => mailSheet(r, r.status === 'pending' ? 'confirm' : r.deposit_status === 'received' ? 'depositIn' : 'confirm', 'Napsat zákazníkovi'),
   note: (r) => sheet(`<h3>Poznámka pro sebe</h3><label class="f">Poznámka<textarea id="an" style="min-height:120px">${esc(r.admin_note || '')}</textarea></label>
@@ -188,6 +250,7 @@ function card(r) {
   else if (r.status === 'confirmed') acts =
     `${r.paid_status === 'unpaid' ? '<button class="btn accent" data-a="paid">Zaplaceno</button>' : '<button class="btn ghost" data-a="paid">Platba</button>'}` +
     `${r.deposit_status === 'none' ? '<button class="btn primary" data-a="depIn">Kauce převzata</button>' : ''}` +
+    `${r.paid_status === 'unpaid' || r.deposit_status === 'none' ? '<button class="btn ghost" data-a="qr">QR platba</button>' : ''}` +
     `<button class="btn ghost" data-a="back">Vráceno</button><button class="btn ghost" data-a="cancel">Zrušit</button>`;
   const contact = [r.phone && `<a href="tel:${esc(r.phone.replace(/\s/g, ''))}">${esc(r.phone)}</a>`, r.email && `<a href="mailto:${esc(r.email)}">${esc(r.email)}</a>`].filter(Boolean).join('');
   return `<article class="card" data-id="${r.id}">

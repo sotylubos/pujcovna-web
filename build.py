@@ -144,8 +144,8 @@ def index():
     chips = "".join(f'<button type="button" class="chip" data-item="{it["id"]}" aria-pressed="false">{e(it["short_name"])}</button>' for it in ITEMS)
     perks = "".join([
         perk(ic('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'), "Večer i o víkendu", "Čas předání domluvíme podle vás."),
-        perk(ic('<path d="M3 7h11v9H3z"/><path d="M14 10h4l3 3v3h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>'), "Dovezeme až domů", "Hrad postavíme i složíme za vás."),
-        perk(ic('<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM17 20h4v-3"/>'), "Převodem, QR nebo hotově", "Zaplatit můžete předem i při převzetí."),
+        perk(ic('<path d="M3 7h11v9H3z"/><path d="M14 10h4l3 3v3h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>'), "Můžeme přivézt", "Na přání vám věc přivezeme až k vám."),
+        perk(ic('<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM17 20h4v-3"/>'), "Převodem, QR nebo hotově", "Platit můžete, jak se vám to hodí."),
         perk(ic('<path d="M20 6 9 17l-5-5"/>'), "Vše vám ukážeme", "Montáž i obsluhu vysvětlíme při předání."),
     ])
     hrad = ITEMS[0]
@@ -177,7 +177,7 @@ def index():
 <div class="steps">
 <div class="step"><span>1</span><b>Vyberte termín</b><p>V kalendáři hned vidíte, kdy je věc volná. Vyplníte pár údajů a odešlete poptávku.</p></div>
 <div class="step"><span>2</span><b>Potvrdíme vám to</b><p>Ozveme se telefonem nebo e-mailem a domluvíme čas předání, případně dovoz.</p></div>
-<div class="step"><span>3</span><b>Vyzvednete a užíváte</b><p>Při převzetí ukážeme, jak věc funguje. Zaplatíte nájem a vratnou kauci, sepíšeme smlouvu.</p></div>
+<div class="step"><span>3</span><b>Vyzvednete a užíváte</b><p>Při převzetí vám ukážeme, jak věc funguje, a složíte vratnou kauci.</p></div>
 </div></div></section>
 
 <section class="wrap sec" id="videa">
@@ -221,7 +221,7 @@ def index():
 <div><span id="sumItem">—</span><span id="sumRange">vyberte v kalendáři</span></div>
 <div><span>Nájem (<span id="sumDays">0 dní</span>)</span><span id="sumRent">0 Kč</span></div>
 <div><span>Vratná kauce</span><span id="sumDep">—</span></div>
-<div class="total"><span>Celkem při převzetí</span><span id="sumTotal">—</span></div>
+<div class="total"><span>Celkem (nájem + vratná kauce)</span><span id="sumTotal">—</span></div>
 </div>
 <p class="alert" id="formErr" role="alert" hidden></p>
 <button type="submit" class="btn btn-accent" id="resSubmit" style="min-height:54px;font-size:17px">Odeslat poptávku</button>
@@ -246,7 +246,7 @@ def index():
 <h2 style="font-size:clamp(30px,3.5vw,40px);margin-bottom:20px">Podmínky v kostce</h2>
 <div class="boxes">
 <div class="box"><b>Doklad totožnosti</b><p>Občanský nebo řidičský průkaz, případně pas.</p></div>
-<div class="box"><b>Vratná kauce a smlouva</b><p>Kauci vrátíme při vrácení věci. Při předání sepíšeme nájemní smlouvu.</p></div>
+<div class="box"><b>Vratná kauce</b><p>Kauci vrátíme při vrácení věci.</p></div>
 <div class="box"><b>Prodloužení</b><p>Dejte vědět aspoň jeden pracovní den předem. Při vrácení dřív se nájem nevrací.</p></div>
 <a href="/podminky.html" style="font-weight:600;padding:6px 0">Celé podmínky zapůjčení</a>
 </div>
@@ -320,16 +320,15 @@ def prose_page(fname, title, desc, inner):
 
 PODMINKY = """<h1>Podmínky zapůjčení</h1>
 <h2>Doklady</h2><p>Při zapůjčení předložíte doklad totožnosti: občanský průkaz, řidičský průkaz, cestovní pas nebo rodný list.</p>
-<h2>Kauce</h2><p>Při zapůjčení zaplatíte vratnou kauci. Kauci vrátíme při vrácení zboží. Pokud vznikla škoda nebo ztráta, vyúčtujeme z kauce náhradu.</p>
-<h2>Smlouva</h2><p>Při předání zboží sepíšeme smlouvu o nájmu. Podpisem potvrzujete údaje v ní uvedené.</p>
-<h2>Rezervace a platba</h2><p>Rezervace platí po našem potvrzení. Nájemné zaplatíte předem převodem, nebo při převzetí hotově či QR kódem. Cena se počítá za každý kalendářní den.</p>
+<h2>Kauce</h2><p>Při převzetí složíte vratnou kauci. Kauci vrátíme při vrácení zboží. Pokud vznikla škoda nebo ztráta, vyúčtujeme z kauce náhradu.</p>
+<h2>Rezervace a platba</h2><p>Rezervace platí po našem potvrzení. Platit můžete hotově, QR kódem nebo převodem. Cena se počítá za každý kalendářní den.</p>
 <h2>Vrácení a prodloužení</h2><p>Zboží je nutné vrátit ve sjednaném termínu. Pokud ho nemůžete vrátit včas, oznamte prodloužení nejméně jeden pracovní den předem. Při nevrácení bez řádného a včasného oznámení se platí nájemné za každý započatý den navíc a 100% příplatek za nedodržení termínu vrácení. Při vrácení před sjednaným termínem nevzniká nárok na vrácení poměrné části nájemného.</p>
 <h2>Poškození, ztráta a zničení</h2><p>Při částečném poškození nad rámec běžného opotřebení hradíte náhradu škody, kterou určí odpovědný pracovník podle hodnoty zboží. Při úplném zničení zboží nebo jeho části hradíte hodnotu odpovídající rozsahu zničení, resp. hodnotě zboží v době zničení. Při ztrátě nebo odcizení hradíte plnou cenu zboží; pokud ztrátu nebo odcizení neohlásíte bez prodlení, hradíte navíc nájemné za dobu přesahující sjednaný termín.</p>
 <h2>Používání</h2><p>Při předání vás seznámíme s montáží a používáním zboží.</p>"""
 
 GDPR = f"""<h1>Ochrana osobních údajů</h1>
 <p>Správcem osobních údajů je Lubomír Šotek, IČ 71391134, Světnov 201, 591 02 Žďár nad Sázavou, e-mail <a href="mailto:{EMAIL}">{EMAIL}</a>, telefon {PHONE}.</p>
-<h2>Jaké údaje zpracováváme a proč</h2><p>Při rezervaci zpracováváme jméno, telefon, e-mail, termín a případnou poznámku. Údaje potřebujeme k vyřízení rezervace a k uzavření a plnění nájemní smlouvy (čl. 6 odst. 1 písm. b) GDPR). Údaje o platbách a kaucích uchováváme kvůli plnění zákonných povinností (účetní a daňové předpisy, evidence tržeb).</p>
+<h2>Jaké údaje zpracováváme a proč</h2><p>Při rezervaci zpracováváme jméno, telefon, e-mail, termín a případnou poznámku. Údaje potřebujeme k vyřízení rezervace a k plnění nájmu (čl. 6 odst. 1 písm. b) GDPR). Údaje o platbách a kaucích uchováváme kvůli plnění zákonných povinností (účetní a daňové předpisy, evidence tržeb).</p>
 <h2>Jak dlouho údaje uchováváme</h2><p>Údaje z nevyřízených nebo odmítnutých poptávek mažeme nejpozději do 6 měsíců. Údaje k uskutečněným zápůjčkám uchováváme po dobu stanovenou daňovými a účetními předpisy.</p>
 <h2>Komu údaje předáváme</h2><p>Údaje neprodáváme ani nepředáváme k marketingu. Ukládáme je u poskytovatelů, kteří pro nás zajišťují provoz webu, databáze a e-mailu, a v nezbytném rozsahu je předáváme orgánům státní správy, pokud to ukládá zákon.</p>
 <h2>Vaše práva</h2><p>Máte právo na přístup ke svým údajům, jejich opravu nebo výmaz, omezení zpracování, přenositelnost a právo podat stížnost u Úřadu pro ochranu osobních údajů. Stačí nám napsat na <a href="mailto:{EMAIL}">{EMAIL}</a>.</p>
