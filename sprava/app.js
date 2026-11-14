@@ -7,7 +7,7 @@ const sb = createClient(SB_URL, SB_KEY, { auth: { persistSession: true, storageK
 
 const FIRM = { name: 'Půjčovna Žďár', owner: 'Lubomír Šotek', ico: '71391134', addr: 'Světnov 201, 591 02 Žďár nad Sázavou', phone: '+420 777 097 902', email: 'info@pujcovna-zdar.cz' };
 const app = document.getElementById('app');
-const S = { tab: 'poptavky', items: [], res: [], calY: 0, calM: 0, archive: 'vse', user: null, settings: {} };
+const S = { tab: 'poptavky', items: [], res: [], calY: 0, calM: 0, archive: 'vse', hYear: 0, hQ: '', hist: [], user: null, settings: {} };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const kc = (n) => String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' Kč';
@@ -57,11 +57,13 @@ function loginView() {
 /* ---------- data ---------- */
 async function load() {
   const since = iso(new Date(Date.now() - 400 * 86400000));
-  const [it, rs, st] = await Promise.all([
+  const [it, rs, st, hs] = await Promise.all([
     sb.from('pj_items').select('*').order('sort'),
     sb.from('pj_reservations').select('*').gte('end_date', since).order('start_date'),
     sb.from('pj_settings').select('key,value'),
+    sb.from('pj_history').select('*').order('year', { ascending: false }).order('month', { ascending: false }),
   ]);
+  if (!hs.error) S.hist = hs.data;
   if (!st.error) { S.settings = {}; st.data.forEach((x) => (S.settings[x.key] = x.value)); }
   if (it.error || rs.error) { toast('Načtení se nepovedlo'); return; }
   S.items = it.data; S.res = rs.data;
@@ -279,10 +281,35 @@ function viewAktualni() {
   return `<h2>Půjčeno teď</h2>` + (now.length ? now.map(card).join('') : `<div class="empty">Nic není půjčené.</div>`) +
     `<h2 style="margin-top:28px">Nadcházející</h2>` + (next.length ? next.map(card).join('') : `<div class="empty">Žádné potvrzené rezervace.</div>`);
 }
+const MONTHS = ['leden', 'únor', 'březen', 'duben', 'květen', 'červen', 'červenec', 'srpen', 'září', 'říjen', 'listopad', 'prosinec'];
+function viewHistorie() {
+  const years = [...new Set(S.hist.map((h) => h.year))].sort((a, b) => b - a);
+  if (!S.hYear || (S.hYear !== -1 && !years.includes(S.hYear))) S.hYear = years[0] || new Date().getFullYear();
+  const q = S.hQ.trim().toLowerCase();
+  const inYear = S.hYear === -1 ? S.hist : S.hist.filter((h) => h.year === S.hYear);
+  const rows = q ? S.hist.filter((h) => h.customer_name.toLowerCase().includes(q) || (h.note || '').toLowerCase().includes(q)) : inYear;
+  const rent = inYear.filter((h) => h.kind === 'rental'), sales = inYear.filter((h) => h.kind === 'sale');
+  const sum = (a) => a.reduce((x, h) => x + h.amount, 0);
+  const chips = [...years.map((y) => [y, String(y)]), [-1, 'Vše']].map(([k, l]) => `<button data-hy="${k}" aria-pressed="${S.hYear === k}">${l}</button>`).join('');
+  const byItem = S.items.map((i) => { const a = rent.filter((h) => h.item_id === i.id); return { n: i.name, c: a.length, t: sum(a) }; }).filter((x) => x.c).sort((a, b) => b.t - a.t);
+  const stats = `<div class="card" style="padding:14px 16px"><div style="display:flex;gap:16px;flex-wrap:wrap"><div><div class="muted">Obrat</div><b style="font-size:20px">${kc(sum(rent))}</b></div><div><div class="muted">Výpůjček</div><b style="font-size:20px">${rent.length}</b></div><div><div class="muted">Průměr</div><b style="font-size:20px">${kc(rent.length ? sum(rent) / rent.length : 0)}</b></div></div>` +
+    byItem.map((x) => `<div style="display:flex;justify-content:space-between;margin-top:8px"><span>${esc(x.n)} <span class="muted">(${x.c}×)</span></span><b>${kc(x.t)}</b></div>`).join('') +
+    (sales.length ? `<div style="display:flex;justify-content:space-between;margin-top:8px"><span>Prodej (${sales.length}×)</span><b>${kc(sum(sales))}</b></div>` : '') + `</div>`;
+  let list = '', last = '';
+  (q ? rows : rows).forEach((h) => {
+    const key = `${h.year}-${h.month}`;
+    if (key !== last) { list += `<h3 style="margin:18px 0 6px;text-transform:capitalize">${MONTHS[h.month - 1]} ${h.year}</h3>`; last = key; }
+    list += `<div class="card" style="padding:10px 14px;margin-bottom:6px"><div style="display:flex;justify-content:space-between;gap:10px"><b>${esc(h.customer_name)}${h.kind === 'sale' ? ' <span class="muted">(prodej)</span>' : ''}</b><b>${kc(h.amount)}</b></div><div class="muted">${esc(itemName(h.item_id))}</div>${h.note ? `<div class="muted" style="margin-top:4px">${esc(h.note)}</div>` : ''}</div>`;
+  });
+  return `<div class="seg" style="margin-bottom:10px">${chips}</div><input id="hq" type="search" placeholder="Hledat jméno nebo poznámku…" value="${esc(S.hQ)}" style="width:100%;margin-bottom:12px">` +
+    (q ? '' : stats) + (list || `<div class="empty">Nic nenalezeno.</div>`) +
+    `<p class="muted" style="margin-top:14px">Údaje z tabulky (jen měsíc, bez přesného dne).</p>`;
+}
 function viewArchiv() {
   const f = { vse: () => true, vraceno: (r) => r.status === 'returned', odmitnuto: (r) => r.status === 'rejected' || r.status === 'cancelled' };
+  const seg = [['vse', 'Vše'], ['vraceno', 'Vráceno'], ['odmitnuto', 'Zrušeno'], ['historie', 'Historie']].map(([k, l]) => `<button data-seg="${k}" aria-pressed="${S.archive === k}">${l}</button>`).join('');
+  if (S.archive === 'historie') return `<h2>Archiv</h2><div class="seg" style="margin-bottom:12px">${seg}</div>` + viewHistorie();
   const list = S.res.filter((r) => ['returned', 'rejected', 'cancelled'].includes(r.status)).filter(f[S.archive]).reverse();
-  const seg = [['vse', 'Vše'], ['vraceno', 'Vráceno'], ['odmitnuto', 'Odmítnuto a zrušeno']].map(([k, l]) => `<button data-seg="${k}" aria-pressed="${S.archive === k}">${l}</button>`).join('');
   const year = new Date().getFullYear();
   const sum = S.res.filter((r) => r.status === 'returned' && r.start_date.startsWith(String(year))).reduce((a, r) => a + r.rent_amount, 0);
   return `<h2>Archiv</h2><p class="muted" style="margin:-6px 0 12px">Nájem za rok ${year}: <b style="color:var(--ink)">${kc(sum)}</b></p><div class="seg">${seg}</div>` +
@@ -377,10 +404,16 @@ function render() {
   document.title = (pending ? `(${pending}) ` : '') + 'Správa – Půjčovna Žďár';
   document.body.classList.toggle('cal', S.tab === 'kalendar');
 }
+app.addEventListener('input', (e) => {
+  if (e.target.id !== 'hq') return;
+  S.hQ = e.target.value; const pos = e.target.selectionStart; render();
+  const el = document.getElementById('hq'); if (el) { el.focus(); el.setSelectionRange(pos, pos); }
+});
 app.addEventListener('click', async (e) => {
   const b = e.target.closest('button,[data-open]'); if (!b) return;
   if (b.dataset.tab) { S.tab = b.dataset.tab; render(); scrollTo(0, 0); return; }
   if (b.dataset.seg) { S.archive = b.dataset.seg; render(); return; }
+  if (b.dataset.hy) { S.hYear = +b.dataset.hy; render(); return; }
   if (b.dataset.cal) { S.calM += +b.dataset.cal; if (S.calM < 0) { S.calM = 11; S.calY--; } if (S.calM > 11) { S.calM = 0; S.calY++; } render(); return; }
   if (b.dataset.open) {
     const r = S.res.find((x) => x.id === b.dataset.open);
