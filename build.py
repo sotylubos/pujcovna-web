@@ -8,6 +8,52 @@ SUPABASE_KEY = "sb_publishable_9-08pVFy82_mNy3rRVh-6w_gUZwOe3I"
 PHONE = "+420 777 097 902"
 PHONE_LINK = "+420777097902"
 EMAIL = "info@pujcovna-zdar.cz"
+BASE = "https://pujcovna-zdar.cz"
+TODAY = "2026-11-14"
+AREAS = "Bohdalov, Herálec, Škrdlovice, Počítky, Obyčtov, Najdek a Jihlava"
+
+# SEO: tvar názvu ve 2. pádu pro titulky + obsah detailních stránek
+SEO = {
+  "hrad": dict(gen="skákacího hradu", title="Půjčovna skákacího hradu Žďár nad Sázavou – 3 000 Kč/den",
+    desc="Pronájem skákacího hradu s klouzačkou ve Žďáru nad Sázavou: 3 000 Kč za den, rozměry 5 × 6,5 m. Dovoz, postavení i složení na přání. Online rezervace s kalendářem.",
+    h2="Pronájem skákacího hradu ve Žďáru nad Sázavou a okolí",
+    text=[
+      "Skákací hrad s klouzačkou půjčujeme ze Světnova u Žďáru nad Sázavou. Hodí se na dětské narozeniny, konec školního roku, zahradní oslavu, svatbu i obecní akci. Má rozměry 5 × 6,5 m a výšku 3,8 m, takže se vejde na většinu zahrad i do kulturního domu.",
+      "Pronájem stojí 3 000 Kč za den, vratná kauce je 5 000 Kč. Pokud hrad přivezeme, počítáme dopravu 6 Kč za kilometr (dovoz i odvoz) a hrad postavíme i složíme. Můžete si ho také vyzvednout sami, večer nebo o víkendu po domluvě.",
+      "Hrad půjčujeme po většinu roku, v zimě třeba do sálu. Nejvíc zájmu bývá od května do října, proto termín rezervujte s předstihem. Volné dny uvidíte v kalendáři rezervace.",
+    ],
+    faq=[
+      ("Kolik stojí pronájem skákacího hradu?", "Pronájem stojí 3 000 Kč za den. K tomu se skládá vratná kauce 5 000 Kč, kterou vrátíme při vrácení hradu. Doprava je 6 Kč za kilometr, počítá se dovoz i odvoz."),
+      ("Jaké má skákací hrad rozměry?", "Hrad je 496 cm široký, 642 cm dlouhý a 380 cm vysoký, tedy zhruba 5 × 6,5 m. Je s klouzačkou."),
+      ("Co potřebuji, aby hrad fungoval?", "Stačí zásuvka 230 V. Ventilátor je relativně tichý."),
+      ("Postavíte hrad u nás?", "Ano. Pokud hrad přivezeme, postavíme ho i složíme, a to je v ceně dopravy. Vyzvednout si ho můžete i sami, vše vám při předání ukážeme."),
+      ("Vejde se hrad do sálu nebo kulturního domu?", "Ano, vejde se i do kulturního domu, takže oslava může být i v zimě."),
+      ("Jak hrad rezervuji?", "Vyberete termín v kalendáři na webu a odešlete poptávku. Rezervace platí po našem potvrzení telefonem nebo e-mailem."),
+    ]),
+  "cistic": dict(gen="čističe koberců", title="Půjčovna čističe koberců Žďár nad Sázavou – Kärcher od 350 Kč/den",
+    desc="Půjčení profesionálního čističe koberců a čalounění Kärcher ve Žďáru nad Sázavou: 350 Kč za den. Nástavce na koberce, sedačky i autosedačky. Online rezervace.",
+    h2="Půjčovna čističe koberců a čalounění ve Žďáru nad Sázavou",
+    text=[
+      "Profesionální čistič koberců a čalounění Kärcher půjčujeme za 350 Kč na den, vratná kauce je 5 000 Kč. Vyčistíte s ním koberce, sedačky, křesla i autosedačky. Součástí zápůjčky je velký nástavec na koberce a malý na čalounění.",
+      "Čisticí prostředek v sáčcích dostanete k stroji, dávka stojí 35 Kč. Jeden sáček znamená jednu nádrž, což vystačí přibližně na 12 m² podle zašpinění. Při předání vás zaškolíme a na stránce je i videonávod.",
+      "Čistič si můžete vyzvednout ve Světnově u Žďáru nad Sázavou večer i o víkendu, po domluvě. Volné dny uvidíte v kalendáři rezervace.",
+    ],
+    faq=[
+      ("Kolik stojí půjčení čističe koberců?", "Půjčení stojí 350 Kč za den. K tomu se skládá vratná kauce 5 000 Kč. Čisticí prášek je za 35 Kč za dávku."),
+      ("Na jak velkou plochu stačí jeden sáček prostředku?", "Jeden sáček znamená jednu nádrž, což vystačí přibližně na 12 m², podle zašpinění."),
+      ("Čím vyčistím sedačku nebo autosedačku?", "K čističi dostanete velký nástavec na koberce a malý nástavec na sedačky, křesla i autosedačky."),
+      ("Musím umět se strojem zacházet?", "Ne. Při předání vás zaškolíme a na webu je videonávod, jak koberce a sedačky čistit."),
+      ("Jak čistič rezervuji?", "Vyberete termín v kalendáři na webu a odešlete poptávku. Rezervace platí po našem potvrzení telefonem nebo e-mailem."),
+    ]),
+  "nosic": dict(gen="nosiče kol", title="Půjčovna nosiče kol na tažné zařízení Žďár nad Sázavou – 200 Kč/den",
+    desc="Půjčení sklopného nosiče na 4 kola na tažné zařízení ve Žďáru nad Sázavou: 200 Kč za den, nosnost 60 kg. Online rezervace."),
+  "box": dict(gen="střešního boxu", title="Půjčovna střešního boxu Žďár nad Sázavou – Neumann Orca 330 l",
+    desc="Půjčení střešního boxu Neumann Orca 330 l ve Žďáru nad Sázavou: 200 Kč za den. Na lyže, kočárek i dovolenou. Příčníky půjčíme také."),
+  "pricniky": dict(gen="střešních příčníků", title="Půjčovna střešních příčníků Žďár nad Sázavou – MAX 120 od 100 Kč/den",
+    desc="Půjčení uzamykatelných střešních příčníků MAX 120 ve Žďáru nad Sázavou: 100 Kč za den, nosnost 75 kg, montáž bez nářadí."),
+  "odvlhcovac": dict(gen="odvlhčovače", title="Půjčovna odvlhčovače Žďár nad Sázavou – Master DHP 65 350 Kč/den",
+    desc="Půjčení profesionálního odvlhčovače Master DHP 65 ve Žďáru nad Sázavou: 350 Kč za den, až 56 l vody za den. Na sklepy, novostavby i vysoušení po vytopení."),
+}
 
 ITEMS = [
   dict(id="hrad", slug="skakaci-hrad", name="Skákací hrad s klouzačkou", short_name="Skákací hrad",
@@ -68,7 +114,20 @@ LOGO_SVG = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="
 PLAY = '<svg width="28" height="28" viewBox="0 0 24 24" fill="#16211C" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>'
 PHONE_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg>'
 
-def head(title, desc, path="/"):
+def ld_json(obj):
+    return '<script type="application/ld+json">' + json.dumps(obj, ensure_ascii=False, separators=(",", ":")) + "</script>"
+
+BUSINESS = {
+  "@context": "https://schema.org", "@type": "LocalBusiness", "@id": BASE + "/#firma",
+  "name": "Půjčovna Žďár", "url": BASE + "/", "telephone": PHONE_LINK, "email": EMAIL,
+  "image": BASE + "/img/hrad-1.jpg",
+  "address": {"@type": "PostalAddress", "streetAddress": "Světnov 201", "addressLocality": "Žďár nad Sázavou", "postalCode": "591 02", "addressCountry": "CZ"},
+  "areaServed": ["Žďár nad Sázavou", "Bohdalov", "Herálec", "Škrdlovice", "Počítky", "Obyčtov", "Najdek", "Jihlava"],
+  "description": "Půjčovna skákacího hradu, čističe koberců, nosiče kol, střešního boxu, příčníků a odvlhčovače ve Světnově u Žďáru nad Sázavou.",
+}
+
+def head(title, desc, path="/", image="/img/hrad-1.jpg", ld=None):
+    ld_html = "\n".join(ld_json(x) for x in (ld or []))
     return f"""<!doctype html>
 <html lang="cs">
 <head>
@@ -76,12 +135,19 @@ def head(title, desc, path="/"):
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{e(title)}</title>
 <meta name="description" content="{e(desc)}">
-<link rel="canonical" href="https://www.pujcovna-zdar.cz{path}">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<link rel="canonical" href="{BASE}{path}">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="cs_CZ">
+<meta property="og:site_name" content="Půjčovna Žďár">
+<meta property="og:url" content="{BASE}{path}">
 <meta property="og:title" content="{e(title)}">
 <meta property="og:description" content="{e(desc)}">
-<meta property="og:image" content="https://www.pujcovna-zdar.cz/img/hrad-1.jpg">
+<meta property="og:image" content="{BASE}{image}">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#1F4D3A">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+{ld_html}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -149,8 +215,9 @@ def index():
         perk(ic('<path d="M20 6 9 17l-5-5"/>'), "Vše vám ukážeme", "Montáž i obsluhu vysvětlíme při předání."),
     ])
     hrad = ITEMS[0]
-    body = head("Půjčovna Žďár – skákací hrad, čistič koberců, střešní box | Světnov u Žďáru n. S.",
-                "Půjčovna ve Světnově u Žďáru nad Sázavou: skákací hrad s klouzačkou, čistič koberců Kärcher, nosič kol, střešní box, příčníky a odvlhčovač. Rezervace online, vyzvednutí večer i o víkendu, dovoz domů.") + f"""
+    body = head("Půjčovna Žďár nad Sázavou – skákací hrad, čistič koberců, střešní box",
+                "Půjčovna ve Světnově u Žďáru nad Sázavou: skákací hrad s klouzačkou, čistič koberců Kärcher, nosič kol, střešní box, příčníky a odvlhčovač. Online rezervace, vyzvednutí večer i o víkendu, dovoz hradu domů.",
+                "/", ld=[BUSINESS, {"@context": "https://schema.org", "@type": "WebSite", "url": BASE + "/", "name": "Půjčovna Žďár", "inLanguage": "cs"}]) + f"""
 <main id="top">
 <section class="wrap hero">
 <div class="hero-text">
@@ -253,6 +320,12 @@ def index():
 </div>
 </div>
 </section>
+
+<section class="white"><div class="wrap sec"><div class="prose">
+<h2>Půjčovna ve Žďáru nad Sázavou</h2>
+<p>Půjčovna ve Světnově u Žďáru nad Sázavou nabízí věci, které se hodí jen pár dní v roce: <a href="/skakaci-hrad.html">skákací hrad s klouzačkou</a> na oslavy, profesionální <a href="/cistic-kobercu.html">čistič koberců a čalounění Kärcher</a>, <a href="/nosic-kol.html">nosič kol</a> na tažné zařízení, <a href="/stresni-box.html">střešní box</a> s <a href="/pricniky.html">příčníky</a> na dovolenou a <a href="/odvlhcovac.html">odvlhčovač</a> na sklepy a vysoušení po vytopení.</p>
+<p>Půjčujeme zákazníkům ze Žďáru nad Sázavou i okolí (například {AREAS}). Zarezervujete online, předání je večer i o víkendu a skákací hrad vám na přání přivezeme a postavíme.</p>
+</div></div></section>
 </main>
 {FOOT}
 {config_script()}
@@ -284,7 +357,30 @@ def detail(it):
         video = f"""<section class="wrap sec"><div class="sec-head"><h2 style="font-size:34px">Video</h2></div>
 <div style="max-width:860px"><div class="video-frame"><button type="button" data-yt="{it["video"]}" aria-label="Přehrát video"><img src="/img/{imgs[-1]}" alt="" loading="lazy"><span class="play">{PLAY}</span></button></div></div></section>"""
     tag = f'<span class="pill" style="background:#16211C;color:#fff">{e(it["tag"])}</span>' if it["tag"] else ""
-    body = head(f'{it["name"]} – půjčovna Žďár nad Sázavou', f'{it["name"]} k zapůjčení ve Světnově u Žďáru nad Sázavou za {kc(it["price"])} na den. {it["short"]}', f'/{it["slug"]}.html') + f"""
+    sx = SEO[it["id"]]
+    url = f'{BASE}/{it["slug"]}.html'
+    product = {"@context": "https://schema.org", "@type": "Product", "name": it["name"], "description": it["desc"],
+               "image": [f'{BASE}/img/{im}' for im in imgs], "url": url,
+               "offers": {"@type": "Offer", "url": url, "priceCurrency": "CZK", "price": it["price"], "availability": "https://schema.org/InStock",
+                          "priceSpecification": {"@type": "UnitPriceSpecification", "price": it["price"], "priceCurrency": "CZK", "unitText": "DAY"},
+                          "seller": {"@id": BASE + "/#firma"}}}
+    crumbs_ld = {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Půjčovna Žďár", "item": BASE + "/"},
+        {"@type": "ListItem", "position": 2, "name": it["name"], "item": url}]}
+    lds = [BUSINESS, product, crumbs_ld]
+    seo_block = ""
+    if sx.get("faq"):
+        lds.append({"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [
+            {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": a_}} for q, a_ in sx["faq"]]})
+        paras = "".join(f"<p>{e(t)}</p>" for t in sx["text"])
+        faq = "".join(f"<details><summary>{e(q)}</summary><p>{e(a_)}</p></details>" for q, a_ in sx["faq"])
+        others = "".join(f'<a href="/{o["slug"]}.html">{e(o["name"])}</a>' for o in ITEMS if o["id"] != it["id"])
+        seo_block = f"""<section class="white"><div class="wrap sec two">
+<div class="prose"><h2>{e(sx["h2"])}</h2>{paras}<p class="muted">Půjčujeme zákazníkům ze Žďáru nad Sázavou i okolí (například {AREAS}).</p></div>
+<div class="faq"><h2>Časté otázky</h2>{faq}</div>
+</div></section>
+<section class="wrap sec" style="padding-top:32px"><h2 style="font-size:26px;margin-bottom:14px">Další z nabídky</h2><div class="more">{others}</div></section>"""
+    body = head(sx["title"], sx["desc"], f'/{it["slug"]}.html', f'/img/{imgs[0]}', lds)+ f"""
 <main>
 <div class="wrap crumbs"><a href="/#nabidka">Nabídka</a> <span aria-hidden="true">/</span> {e(it["name"])}</div>
 <section class="wrap detail">
@@ -307,6 +403,7 @@ def detail(it):
 <div><h2 style="font-size:34px;margin-bottom:20px">Dobré vědět</h2><ul class="notes" style="margin-top:0">{bullets}</ul></div>
 </div></section>
 {video}
+{seo_block}
 </main>
 {FOOT}
 {config_script()}
@@ -344,4 +441,11 @@ if __name__ == "__main__":
     prose_page("podminky.html", "Podmínky zapůjčení – Půjčovna Žďár", "Podmínky zapůjčení v Půjčovně Žďár: doklady, kauce, vrácení, poškození.", PODMINKY)
     prose_page("gdpr.html", "Ochrana osobních údajů – Půjčovna Žďár", "Jak Půjčovna Žďár zpracovává osobní údaje z rezervací.", GDPR)
     (OUT / "favicon.svg").write_text(FAVICON, encoding="utf-8")
+    pages = ["/"] + [f'/{it["slug"]}.html' for it in ITEMS] + ["/podminky.html", "/gdpr.html"]
+    sm = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + "".join(
+        f'<url><loc>{BASE}{pg}</loc><lastmod>{TODAY}</lastmod></url>\n' for pg in pages) + "</urlset>\n"
+    (OUT / "sitemap.xml").write_text(sm, encoding="utf-8")
+    (OUT / "robots.txt").write_text(f"User-agent: *\nDisallow: /sprava/\n\nSitemap: {BASE}/sitemap.xml\n", encoding="utf-8")
+    nf = head("Stránka nenalezena – Půjčovna Žďár", "Tato stránka neexistuje.", "/404.html").replace('content="index,follow,max-image-preview:large"', 'content="noindex"') + f'<main class="wrap sec"><div class="prose"><h1>Stránka nenalezena</h1><p>Tuhle stránku jsme nenašli. Podívejte se na <a href="/">nabídku půjčovny</a> nebo zavolejte na <a href="tel:{PHONE_LINK}">{PHONE}</a>.</p></div></main>{FOOT}</body></html>'
+    (OUT / "404.html").write_text(nf, encoding="utf-8")
     print("hotovo")

@@ -191,3 +191,13 @@ ul.notes{margin:18px 0 0;padding-left:20px;color:var(--muted);line-height:1.7}
 .hp{position:absolute!important;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 @media (max-width:480px){.site-head .wrap{flex-wrap:nowrap;gap:12px}.logo-text{font-size:18px}.head-cta{padding:10px 16px;font-size:14px}}
 .form>.field{flex:0 0 auto}
+
+.faq h2{font-size:26px;margin:0 0 14px}
+.faq details{border-bottom:1px solid #E5E1D8;padding:12px 0}
+.faq summary{cursor:pointer;font-weight:700;list-style:none;display:flex;justify-content:space-between;gap:12px;align-items:center;min-height:32px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";font-size:22px;line-height:1;color:var(--green,#1F4D3A)}
+.faq details[open] summary::after{content:"–"}
+.faq details p{margin:8px 0 0;color:#2c3833;line-height:1.6}
+.more{display:flex;gap:10px;flex-wrap:wrap}
+.more a{border:1.5px solid #CFCAC0;border-radius:999px;padding:10px 16px;font-weight:600;background:#fff}

@@ -1,3 +1,4 @@
 User-agent: *
 Disallow: /sprava/
-Sitemap: https://www.pujcovna-zdar.cz/sitemap.xml
+
+Sitemap: https://pujcovna-zdar.cz/sitemap.xml
