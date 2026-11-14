@@ -282,12 +282,20 @@ function viewAktualni() {
     `<h2 style="margin-top:28px">Nadcházející</h2>` + (next.length ? next.map(card).join('') : `<div class="empty">Žádné potvrzené rezervace.</div>`);
 }
 const MONTHS = ['leden', 'únor', 'březen', 'duben', 'květen', 'červen', 'červenec', 'srpen', 'září', 'říjen', 'listopad', 'prosinec'];
+/* vrácené rezervace z aplikace se počítají do historie spolu s tabulkou */
+function appHist() {
+  return S.res.filter((r) => r.status === 'returned').map((r) => {
+    const d = pd(r.start_date);
+    return { id: r.id, year: d.getFullYear(), month: d.getMonth() + 1, customer_name: r.customer_name, item_id: r.item_id, amount: r.rent_amount, note: r.deposit_retained > 0 ? `Z kauce zadrženo ${kc(r.deposit_retained)}${r.deposit_retained_reason ? ' – ' + r.deposit_retained_reason : ''}` : null, kind: 'rental' };
+  }).sort((a, b) => b.year - a.year || b.month - a.month);
+}
 function viewHistorie() {
-  const years = [...new Set(S.hist.map((h) => h.year))].sort((a, b) => b - a);
+  const years = [...new Set(S.hist.concat(appHist()).map((h) => h.year))].sort((a, b) => b - a);
   if (!S.hYear || (S.hYear !== -1 && !years.includes(S.hYear))) S.hYear = years[0] || new Date().getFullYear();
   const q = S.hQ.trim().toLowerCase();
-  const inYear = S.hYear === -1 ? S.hist : S.hist.filter((h) => h.year === S.hYear);
-  const rows = q ? S.hist.filter((h) => h.customer_name.toLowerCase().includes(q) || (h.note || '').toLowerCase().includes(q)) : inYear;
+  const all = S.hist.concat(appHist());
+  const inYear = S.hYear === -1 ? all : all.filter((h) => h.year === S.hYear);
+  const rows = q ? all.filter((h) => h.customer_name.toLowerCase().includes(q) || (h.note || '').toLowerCase().includes(q)) : inYear;
   const rent = inYear.filter((h) => h.kind === 'rental'), sales = inYear.filter((h) => h.kind === 'sale');
   const sum = (a) => a.reduce((x, h) => x + h.amount, 0);
   const chips = [...years.map((y) => [y, String(y)]), [-1, 'Vše']].map(([k, l]) => `<button data-hy="${k}" aria-pressed="${S.hYear === k}">${l}</button>`).join('');
@@ -303,7 +311,7 @@ function viewHistorie() {
   });
   return `<div class="seg" style="margin-bottom:10px">${chips}</div><input id="hq" type="search" placeholder="Hledat jméno nebo poznámku…" value="${esc(S.hQ)}" style="width:100%;margin-bottom:12px">` +
     (q ? '' : stats) + (list || `<div class="empty">Nic nenalezeno.</div>`) +
-    `<p class="muted" style="margin-top:14px">Údaje z tabulky (jen měsíc, bez přesného dne).</p>`;
+    `<p class="muted" style="margin-top:14px">Starší údaje jsou z tabulky (jen měsíc, bez přesného dne). Vrácené rezervace z aplikace se přičítají sem automaticky.</p>`;
 }
 function viewArchiv() {
   const f = { vse: () => true, vraceno: (r) => r.status === 'returned', odmitnuto: (r) => r.status === 'rejected' || r.status === 'cancelled' };
