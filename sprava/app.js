@@ -85,7 +85,7 @@ const T = {
   }),
   depositIn: (r) => ({
     subject: `Potvrzení o převzetí kauce – rezervace ${r.code}`,
-    body: `Dobrý den,\n\npotvrzujeme, že jsme dne ${nowCz()} od Vás převzali vratnou kauci ve výši ${kc(r.deposit_amount)}.\n\nZapůjčeno: ${itemName(r.item_id)}\nTermín: ${dmy(r.start_date)}${r.end_date !== r.start_date ? ' – ' + dmy(r.end_date) : ''}\nČíslo rezervace: ${r.code}\n\nKauci Vám vrátíme při vrácení zapůjčené věci v pořádku.` + sign + `\nIČ ${FIRM.ico}, ${FIRM.addr}`,
+    body: `Dobrý den,\n\npotvrzujeme, že jsme dne ${nowCz()} od Vás převzali vratnou kauci ve výši ${kc(r.deposit_amount)}.\n\nZapůjčeno: ${itemName(r.item_id)}\nNájemce: ${r.customer_name}${r.address ? ', ' + r.address : ''}\nTermín: ${dmy(r.start_date)}${r.end_date !== r.start_date ? ' – ' + dmy(r.end_date) : ''}\nČíslo rezervace: ${r.code}\n\nKauci Vám vrátíme při vrácení zapůjčené věci v pořádku.` + sign + `\nIČ ${FIRM.ico}, ${FIRM.addr}`,
   }),
   depositOut: (r) => ({
     subject: `Vrácení kauce – rezervace ${r.code}`,
@@ -258,6 +258,7 @@ function card(r) {
   return `<article class="card" data-id="${r.id}">
     <div class="row"><div><p class="item">${esc(itemName(r.item_id))}</p><div class="dates">${esc(range(r))} <span class="muted" style="font-weight:500">· ${daysWord(n)}</span></div></div><span class="code">#${esc(r.code)}</span></div>
     <div class="who"><b>${esc(r.customer_name)}</b>${contact}</div>
+    ${r.address ? `<div class="who"><a href="https://mapy.cz/?q=${encodeURIComponent(r.address)}" target="_blank" rel="noopener">${esc(r.address)}</a></div>` : ''}
     ${r.note ? `<div class="note">${esc(r.note)}</div>` : ''}
     ${r.admin_note ? `<div class="note" style="background:#FFF4E8">Moje poznámka: ${esc(r.admin_note)}</div>` : ''}
     <div class="tags">${tags.join('')}</div>
@@ -325,6 +326,7 @@ function newRes() {
     <label class="f">Jméno<input id="nn" autocomplete="off"></label>
     <label class="f">Telefon<input id="np" type="tel"></label>
     <label class="f">E-mail (nepovinné)<input id="ne" type="email"></label>
+    <label class="f">Adresa (nepovinné)<input id="na" autocomplete="off"></label>
     <label style="display:flex;gap:10px;align-items:center;min-height:44px"><input id="nd" type="checkbox" style="width:20px;height:20px"> Dovoz</label>
     <label class="f">Poznámka<textarea id="nno" style="min-height:80px"></textarea></label>
     <p id="nsum" class="muted" style="margin:0"></p>
@@ -346,7 +348,7 @@ function newRes() {
       if (g('#nn').value.trim().length < 2 || g('#np').value.trim().length < 6) return toast('Vyplňte jméno a telefon');
       const { data, error } = await sb.from('pj_reservations').insert({
         item_id: c.it.id, start_date: c.f, end_date: c.to, customer_name: g('#nn').value.trim(), phone: g('#np').value.trim(),
-        email: g('#ne').value.trim() || null, note: g('#nno').value.trim() || null, delivery: g('#nd').checked, source: 'phone',
+        email: g('#ne').value.trim() || null, address: g('#na').value.trim() || null, note: g('#nno').value.trim() || null, delivery: g('#nd').checked, source: 'phone',
         status: 'confirmed', rent_amount: c.n * c.it.price, deposit_amount: c.it.deposit,
       }).select().single();
       if (error) return toast('Uložení se nepovedlo: ' + error.message);
