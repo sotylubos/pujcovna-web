@@ -133,15 +133,12 @@ function accountSheet(after) {
     S.settings.account = v; closeSheet(); toast('Účet uložen'); after && after();
   }));
 }
-function qrSheet(r) {
-  if (!S.settings.account || !toIban(S.settings.account)) return accountSheet(() => qrSheet(r));
-  const opts = [];
-  if (r.paid_status === 'unpaid') opts.push(['rent', 'Nájem', r.rent_amount]);
-  if (r.deposit_status === 'none') opts.push(['dep', 'Kauce', r.deposit_amount]);
-  if (opts.length === 2) opts.push(['both', 'Nájem + kauce', r.rent_amount + r.deposit_amount]);
-  if (!opts.length) opts.push(['rent', 'Nájem', r.rent_amount]);
+function qrSheet(r, start) {
+  if (!S.settings.account || !toIban(S.settings.account)) return accountSheet(() => qrSheet(r, start));
+  const opts = [['dep', 'Kauce', r.deposit_amount], ['rent', 'Nájem', r.rent_amount], ['both', 'Nájem + kauce', r.rent_amount + r.deposit_amount]];
+  if (!start) start = r.deposit_status === 'none' ? 'dep' : 'rent';
   sheet(`<h3>QR platba</h3>
-    <div class="seg" id="qs">${opts.map(([k, l, a], i) => `<button data-q="${k}" aria-pressed="${i === 0}">${l} · ${kc(a)}</button>`).join('')}</div>
+    <div class="seg" id="qs">${opts.map(([k, l, a]) => `<button data-q="${k}" aria-pressed="${k === start}">${l} · ${kc(a)}</button>`).join('')}</div>
     <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
       <img id="qimg" alt="QR kód k zaplacení" style="width:min(78vw,340px);height:auto;image-rendering:pixelated;background:#fff">
       <b id="qamt" style="font-family:var(--head);font-size:30px"></b>
@@ -149,7 +146,7 @@ function qrSheet(r) {
     </div>
     <div class="actions"><button class="btn primary" id="qpaid">Zaplaceno</button><button class="btn ghost" id="qacc">Změnit účet</button><button class="btn ghost" data-close>Zavřít</button></div>`,
   (el) => {
-    let cur = opts[0];
+    let cur = opts.find((o) => o[0] === start) || opts[0];
     const draw = async () => {
       const spd = `SPD*1.0*ACC:${toIban(S.settings.account)}*AM:${cur[2].toFixed(2)}*CC:CZK*MSG:${ascii('Pujcovna Zdar ' + r.code + ' ' + cur[1]).slice(0, 60)}`;
       el.querySelector('#qimg').src = await QRCode.toDataURL(spd, { margin: 2, width: 640, errorCorrectionLevel: 'M' });
@@ -157,7 +154,7 @@ function qrSheet(r) {
       el.querySelectorAll('[data-q]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.q === cur[0]));
     };
     el.querySelectorAll('[data-q]').forEach((b) => (b.onclick = () => { cur = opts.find((o) => o[0] === b.dataset.q); draw(); }));
-    el.querySelector('#qacc').onclick = () => accountSheet(() => qrSheet(r));
+    el.querySelector('#qacc').onclick = () => accountSheet(() => qrSheet(r, cur[0]));
     el.querySelector('#qpaid').onclick = async () => {
       closeSheet();
       const f = {}, now = new Date().toISOString();
@@ -197,7 +194,12 @@ const ACT = {
   (el) => el.querySelectorAll('[data-p]').forEach((b) => (b.onclick = async () => {
     closeSheet(); await patch(r, { paid_status: b.dataset.p, paid_at: b.dataset.p === 'unpaid' ? null : new Date().toISOString() }, 'Uloženo');
   }))),
-  depIn: async (r) => { if (await patch(r, { deposit_status: 'received', deposit_received_at: new Date().toISOString() }, 'Kauce převzata')) mailSheet(r, 'depositIn', 'Poslat potvrzení o převzetí kauce'); },
+  depIn: (r) => sheet(`<h3>Kauce ${esc(kc(r.deposit_amount))}</h3><p class="muted" style="margin:0">Jak zákazník kauci platí?</p>
+    <div class="choices"><button class="btn primary" id="dcash">Hotově – převzato</button><button class="btn accent" id="dqr">Ukázat QR kód</button><button class="btn ghost" data-close>Zrušit</button></div>`,
+  (el) => {
+    el.querySelector('#dcash').onclick = async () => { closeSheet(); if (await patch(r, { deposit_status: 'received', deposit_received_at: new Date().toISOString() }, 'Kauce převzata')) mailSheet(r, 'depositIn', 'Poslat potvrzení o převzetí kauce'); };
+    el.querySelector('#dqr').onclick = () => qrSheet(r, 'dep');
+  }),
   back: (r) => sheet(`<h3>Vráceno: ${esc(itemName(r.item_id))}</h3>
     <p style="margin:0">Kauce ${esc(kc(r.deposit_amount))}</p>
     <div class="choices"><button class="btn primary" id="full">Vrátit celou kauci</button></div>
@@ -250,7 +252,7 @@ function card(r) {
   else if (r.status === 'confirmed') acts =
     `${r.paid_status === 'unpaid' ? '<button class="btn accent" data-a="paid">Zaplaceno</button>' : '<button class="btn ghost" data-a="paid">Platba</button>'}` +
     `${r.deposit_status === 'none' ? '<button class="btn primary" data-a="depIn">Kauce převzata</button>' : ''}` +
-    `${r.paid_status === 'unpaid' || r.deposit_status === 'none' ? '<button class="btn ghost" data-a="qr">QR platba</button>' : ''}` +
+    `<button class="btn ghost" data-a="qr">QR platba</button>` +
     `<button class="btn ghost" data-a="back">Vráceno</button><button class="btn ghost" data-a="cancel">Zrušit</button>`;
   const contact = [r.phone && `<a href="tel:${esc(r.phone.replace(/\s/g, ''))}">${esc(r.phone)}</a>`, r.email && `<a href="mailto:${esc(r.email)}">${esc(r.email)}</a>`].filter(Boolean).join('');
   return `<article class="card" data-id="${r.id}">
@@ -287,24 +289,30 @@ function viewArchiv() {
 }
 function viewKalendar() {
   const MON = ['leden', 'únor', 'březen', 'duben', 'květen', 'červen', 'červenec', 'srpen', 'září', 'říjen', 'listopad', 'prosinec'];
+  const SHORT = { hrad: 'Hrad', cistic: 'Čistič', nosic: 'Nosič', box: 'Box', pricniky: 'Příčn.', odvlhcovac: 'Odvlh.' };
   const y = S.calY, m = S.calM, cnt = new Date(y, m + 1, 0).getDate(), t = todayIso();
-  let head = '<tr><th></th>';
-  for (let d = 1; d <= cnt; d++) { const dow = new Date(y, m, d).getDay(); head += `<th class="${dow === 0 || dow === 6 ? 'we' : ''}">${d}<br>${WD[dow]}</th>`; }
-  head += '</tr>';
-  const rows = S.items.map((it) => {
-    let tr = `<tr><td class="lbl">${esc(it.short_name)}</td>`;
-    for (let d = 1; d <= cnt; d++) {
-      const s = iso(new Date(y, m, d));
-      const r = S.res.find((x) => x.item_id === it.id && ['pending', 'confirmed', 'returned'].includes(x.status) && x.start_date <= s && x.end_date >= s);
-      const cls = [r ? (r.status === 'pending' ? 'p' : 'c') : '', s === t ? 't' : ''].join(' ');
-      tr += `<td class="${cls}" ${r ? `data-open="${r.id}" title="${esc(r.customer_name)}"` : ''}></td>`;
+  const items = S.items.filter((i) => i.active);
+  const live = S.res.filter((x) => ['pending', 'confirmed', 'returned'].includes(x.status));
+  const first = (s) => esc(String(s).trim().split(/\s+/)[0]).slice(0, 7);
+  let rows = '';
+  for (let d = 1; d <= cnt; d++) {
+    const s = iso(new Date(y, m, d)), dow = new Date(y, m, d).getDay(), we = dow === 0 || dow === 6;
+    rows += `<div class="kr${we ? ' we' : ''}${s === t ? ' today' : ''}"><div class="kd"><b>${d}.</b><span>${WD[dow]}</span></div>`;
+    for (const it of items) {
+      const r = live.find((x) => x.item_id === it.id && x.start_date <= s && x.end_date >= s);
+      if (!r) { rows += '<div class="kc"></div>'; continue; }
+      const st = r.start_date === s || d === 1, en = r.end_date === s || d === cnt;
+      rows += `<button class="kc on ${r.status === 'pending' ? 'p' : r.status === 'returned' ? 'r' : ''}${st ? ' st' : ''}${en ? ' en' : ''}" data-open="${r.id}" aria-label="${esc(it.short_name)} ${d}. – ${esc(r.customer_name)}">${st ? first(r.customer_name) : ''}</button>`;
     }
-    return tr + '</tr>';
-  }).join('');
+    rows += '</div>';
+  }
+  const head = `<div class="kr kh"><div class="kd"></div>${items.map((it) => `<div class="kc">${esc(SHORT[it.id] || it.short_name)}</div>`).join('')}</div>`;
+  const monthRes = live.filter((x) => x.start_date <= iso(new Date(y, m, cnt)) && x.end_date >= iso(new Date(y, m, 1)));
   return `<h2>Kalendář</h2><div class="cal-wrap">
     <div class="cal-nav"><button data-cal="-1" aria-label="Předchozí měsíc">‹</button><b>${MON[m]} ${y}</b><button data-cal="1" aria-label="Další měsíc">›</button></div>
-    <table class="tl">${head}${rows}</table>
-    <p class="muted" style="font-size:13px;margin:10px 0 0"><span style="display:inline-block;width:12px;height:12px;background:#1F4D3A;border-radius:3px"></span> potvrzeno &nbsp; <span style="display:inline-block;width:12px;height:12px;background:#FF7A3D;border-radius:3px"></span> čeká na potvrzení · klepnutím otevřete</p></div>`;
+    <div class="kgrid" style="--n:${items.length}">${head}${rows}</div>
+    <p class="muted" style="font-size:13px;margin:12px 0 0;display:flex;gap:14px;flex-wrap:wrap"><span><i class="lg" style="background:#1F4D3A"></i>potvrzeno</span><span><i class="lg" style="background:#FF7A3D"></i>čeká</span><span><i class="lg" style="background:#9DB5A8"></i>vráceno</span><span>Klepnutím otevřete</span></p></div>
+    <p class="muted" style="margin:14px 2px 0">Tento měsíc: <b style="color:var(--ink)">${monthRes.length}</b> rezervací</p>`;
 }
 
 /* ---------- nová rezervace (telefonem) ---------- */
