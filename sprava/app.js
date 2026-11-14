@@ -7,7 +7,7 @@ const sb = createClient(SB_URL, SB_KEY, { auth: { persistSession: true, storageK
 
 const FIRM = { name: 'Půjčovna Žďár', owner: 'Lubomír Šotek', ico: '71391134', addr: 'Světnov 201, 591 02 Žďár nad Sázavou', phone: '+420 777 097 902', email: 'info@pujcovna-zdar.cz' };
 const app = document.getElementById('app');
-const S = { tab: 'poptavky', items: [], res: [], calY: 0, calM: 0, archive: 'vse', hYear: 0, hQ: '', hist: [], user: null, settings: {} };
+const S = { tab: 'poptavky', items: [], res: [], calY: 0, calM: 0, archive: 'vse', hYear: 0, hQ: '', hist: [], push: 'unknown', user: null, settings: {} };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const kc = (n) => String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' Kč';
@@ -43,6 +43,7 @@ async function boot() {
   }
   const n = new Date(); S.calY = n.getFullYear(); S.calM = n.getMonth();
   await load();
+  await pushInit();
   render();
   document.addEventListener('visibilitychange', () => { if (!document.hidden) load().then(render); });
 }
@@ -52,6 +53,39 @@ function loginView() {
     <h2>Správa půjčovny</h2><p class="muted">Přihlaste se Google účtem.</p>
     <button class="btn primary" style="flex:none;padding:0 28px" id="g">Přihlásit přes Google</button></div>`;
   document.getElementById('g').onclick = () => sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + '/sprava/' } });
+}
+
+/* ---------- upozornění (web push) ---------- */
+const VAPID = 'BB7QypyVHqtz1HDNdPBlY910XJNi8hpP_3BApXhe0a1dP4Qng9iw8PzEPZi1aIO1sgIpBF0IwEz13kXOD69oJlM';
+const b64 = (v) => { const p = '='.repeat((4 - (v.length % 4)) % 4); const r = atob((v + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from([...r].map((c) => c.charCodeAt(0))); };
+async function pushInit() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) { S.push = 'unsupported'; return; }
+  if (Notification.permission === 'denied') { S.push = 'denied'; return; }
+  try {
+    const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription();
+    if (sub && Notification.permission === 'granted') {
+      // pro jistotu znovu uložíme (kdyby záznam v databázi chyběl)
+      const j = sub.toJSON(); await sb.from('pj_push_subs').upsert({ endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, user_id: S.user.id, label: navigator.userAgent.slice(0, 80) });
+      S.push = 'on';
+    } else S.push = 'off';
+  } catch { S.push = 'off'; }
+}
+async function pushOn() {
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { S.push = perm === 'denied' ? 'denied' : 'off'; render(); return; }
+    const reg = await navigator.serviceWorker.ready;
+    const sub = (await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(VAPID) }));
+    const j = sub.toJSON();
+    const { error } = await sb.from('pj_push_subs').upsert({ endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, user_id: S.user.id, label: navigator.userAgent.slice(0, 80) });
+    if (error) throw error;
+    S.push = 'on'; render(); toast('Upozornění zapnuta');
+  } catch (e) { toast('Zapnutí se nepovedlo: ' + (e.message || e)); }
+}
+function pushBanner() {
+  if (S.push === 'off') return `<div class="card" style="display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:14px 16px;margin-bottom:14px"><span><b>Upozornění na nové rezervace</b><br><span class="muted">Zapněte na tomto zařízení.</span></span><button class="btn primary" id="pushOn" style="flex:none;padding:0 20px">Zapnout</button></div>`;
+  if (S.push === 'denied') return `<div class="card muted" style="padding:14px 16px;margin-bottom:14px">Upozornění jsou v prohlížeči zablokovaná. Povolte je v nastavení webu (ikona zámku vedle adresy).</div>`;
+  return '';
 }
 
 /* ---------- data ---------- */
@@ -404,7 +438,7 @@ function render() {
   const tabs = [['poptavky', 'Poptávky'], ['aktualni', 'Půjčeno'], ['kalendar', 'Kalendář'], ['archiv', 'Archiv']]
     .map(([k, l]) => `<button data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${ICONS[k]}${l}${k === 'poptavky' && pending ? `<span class="badge">${pending}</span>` : ''}</button>`).join('');
   app.innerHTML = `<header class="top"><h1>Půjčovna Žďár</h1><button id="rf" aria-label="Obnovit">Obnovit</button><button id="lo">Odhlásit</button></header>
-    <main>${views[S.tab]()}</main>
+    <main>${S.tab === 'poptavky' ? pushBanner() : ''}${views[S.tab]()}</main>
     <button class="fab" id="add"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Rezervace</button>
     <nav class="tabs">${tabs}</nav>`;
   document.title = (pending ? `(${pending}) ` : '') + 'Správa – Půjčovna Žďár';
@@ -427,6 +461,7 @@ app.addEventListener('click', async (e) => {
       (el) => el.addEventListener('click', (ev) => { const a = ev.target.closest('[data-a]'); if (a) { closeSheet(); ACT[a.dataset.a](r); } }));
     return;
   }
+  if (b.id === 'pushOn') return pushOn();
   if (b.id === 'add') return newRes();
   if (b.id === 'rf') { await load(); render(); toast('Aktualizováno'); return; }
   if (b.id === 'lo') { await sb.auth.signOut(); return boot(); }
