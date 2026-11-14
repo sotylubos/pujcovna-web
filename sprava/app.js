@@ -296,13 +296,11 @@ function viewHistorie() {
   const all = S.hist.concat(appHist());
   const inYear = S.hYear === -1 ? all : all.filter((h) => h.year === S.hYear);
   const rows = q ? all.filter((h) => h.customer_name.toLowerCase().includes(q) || (h.note || '').toLowerCase().includes(q)) : inYear;
-  const rent = inYear.filter((h) => h.kind === 'rental'), sales = inYear.filter((h) => h.kind === 'sale');
   const sum = (a) => a.reduce((x, h) => x + h.amount, 0);
   const chips = [...years.map((y) => [y, String(y)]), [-1, 'Vše']].map(([k, l]) => `<button data-hy="${k}" aria-pressed="${S.hYear === k}">${l}</button>`).join('');
-  const byItem = S.items.map((i) => { const a = rent.filter((h) => h.item_id === i.id); return { n: i.name, c: a.length, t: sum(a) }; }).filter((x) => x.c).sort((a, b) => b.t - a.t);
-  const stats = `<div class="card" style="padding:14px 16px"><div style="display:flex;gap:16px;flex-wrap:wrap"><div><div class="muted">Obrat</div><b style="font-size:20px">${kc(sum(rent))}</b></div><div><div class="muted">Výpůjček</div><b style="font-size:20px">${rent.length}</b></div><div><div class="muted">Průměr</div><b style="font-size:20px">${kc(rent.length ? sum(rent) / rent.length : 0)}</b></div></div>` +
-    byItem.map((x) => `<div style="display:flex;justify-content:space-between;margin-top:8px"><span>${esc(x.n)} <span class="muted">(${x.c}×)</span></span><b>${kc(x.t)}</b></div>`).join('') +
-    (sales.length ? `<div style="display:flex;justify-content:space-between;margin-top:8px"><span>Prodej (${sales.length}×)</span><b>${kc(sum(sales))}</b></div>` : '') + `</div>`;
+  const byItem = S.items.map((i) => { const a = inYear.filter((h) => h.item_id === i.id); return { n: i.name, c: a.length, t: sum(a) }; }).filter((x) => x.c).sort((a, b) => b.t - a.t);
+  const stats = `<div class="card" style="padding:14px 16px"><div style="display:flex;gap:28px;flex-wrap:wrap"><div><div class="muted">Obrat</div><b style="font-size:20px">${kc(sum(inYear))}</b></div><div><div class="muted">Výpůjček</div><b style="font-size:20px">${inYear.length}</b></div></div>` +
+    byItem.map((x) => `<div style="display:flex;justify-content:space-between;margin-top:8px"><span>${esc(x.n)} <span class="muted">(${x.c}×)</span></span><b>${kc(x.t)}</b></div>`).join('') + `</div>`;
   let list = '', last = '';
   (q ? rows : rows).forEach((h) => {
     const key = `${h.year}-${h.month}`;
