@@ -261,6 +261,48 @@ const ACT = {
   qr: (r) => qrSheet(r),
   cancel: async (r) => { if (confirm('Zrušit tuto rezervaci?')) await patch(r, { status: 'cancelled' }, 'Zrušeno'); },
   mail: (r) => mailSheet(r, r.status === 'pending' ? 'confirm' : r.deposit_status === 'received' ? 'depositIn' : 'confirm', 'Napsat zákazníkovi'),
+  edit: (r) => {
+    const opts = S.items.map((i) => `<option value="${i.id}"${i.id === r.item_id ? ' selected' : ''}>${esc(i.name)}</option>`).join('');
+    sheet(`<h3>Upravit rezervaci <span class="muted" style="font-size:15px">#${esc(r.code)}</span></h3>
+      <label class="f">Co<select id="ei">${opts}</select></label>
+      <div style="display:flex;gap:10px"><label class="f" style="flex:1">Od<input id="ef" type="date" value="${r.start_date}"></label><label class="f" style="flex:1">Do<input id="et" type="date" value="${r.end_date}"></label></div>
+      <label class="f">Jméno<input id="en" autocomplete="off" value="${esc(r.customer_name)}"></label>
+      <label class="f">Telefon<input id="ep" type="tel" value="${esc(r.phone || '')}"></label>
+      <label class="f">E-mail<input id="ee" type="email" value="${esc(r.email || '')}"></label>
+      <label class="f">Adresa<input id="ea" autocomplete="off" value="${esc(r.address || '')}"></label>
+      <label style="display:flex;gap:10px;align-items:center;min-height:44px"><input id="ed" type="checkbox" style="width:20px;height:20px"${r.delivery ? ' checked' : ''}> Dovoz</label>
+      <div style="display:flex;gap:10px"><label class="f" style="flex:1">Nájem (Kč)<input id="er" type="number" inputmode="numeric" min="0" value="${r.rent_amount}"></label><label class="f" style="flex:1">Kauce (Kč)<input id="ek" type="number" inputmode="numeric" min="0" value="${r.deposit_amount}"></label></div>
+      <label class="f">Poznámka zákazníka<textarea id="eno" style="min-height:80px">${esc(r.note || '')}</textarea></label>
+      <p id="esum" class="muted" style="margin:0"></p>
+      <div class="actions"><button class="btn primary" id="esave">Uložit změny</button><button class="btn ghost" data-close>Zrušit</button></div>`,
+    (el) => {
+      const g = (id) => el.querySelector(id);
+      let manual = false;
+      ['#er', '#ek'].forEach((q) => g(q).addEventListener('input', () => { manual = true; }));
+      const check = (recalc) => {
+        const it = S.items.find((i) => i.id === g('#ei').value), f = g('#ef').value, to = g('#et').value;
+        if (!f || !to || to < f) { g('#esum').textContent = 'Zkontrolujte termín.'; return null; }
+        const n = Math.round((pd(to) - pd(f)) / 86400000) + 1;
+        if (recalc && !manual) { g('#er').value = n * it.price; g('#ek').value = it.deposit; }
+        const clash = S.res.find((x) => x.id !== r.id && x.item_id === it.id && ['pending', 'confirmed'].includes(x.status) && x.start_date <= to && x.end_date >= f);
+        g('#esum').innerHTML = `${daysWord(n)}` + (clash ? `<br><span style="color:#8A2E0A;font-weight:700">Pozor, kříží se s rezervací ${esc(clash.customer_name)} (${esc(range(clash))}).</span>` : '');
+        return { it, f, to };
+      };
+      ['#ei', '#ef', '#et'].forEach((q) => g(q).addEventListener('change', () => { if (g('#et').value < g('#ef').value) g('#et').value = g('#ef').value; check(true); }));
+      check(false);
+      g('#esave').onclick = async () => {
+        const c = check(false); if (!c) return;
+        const name = g('#en').value.trim(), phone = g('#ep').value.trim();
+        if (name.length < 2) return toast('Vyplňte jméno');
+        if (phone.length < 6) return toast('Vyplňte telefon');
+        const rent = Math.round(+g('#er').value), dep = Math.round(+g('#ek').value);
+        if (!(rent >= 0) || !(dep >= 0)) return toast('Zkontrolujte částky');
+        closeSheet();
+        await patch(r, { item_id: c.it.id, start_date: c.f, end_date: c.to, customer_name: name, phone, email: g('#ee').value.trim() || null,
+          address: g('#ea').value.trim() || null, delivery: g('#ed').checked, rent_amount: rent, deposit_amount: dep, note: g('#eno').value.trim() || null }, 'Změny uloženy');
+      };
+    });
+  },
   note: (r) => sheet(`<h3>Poznámka pro sebe</h3><label class="f">Poznámka<textarea id="an" style="min-height:120px">${esc(r.admin_note || '')}</textarea></label>
     <div class="actions"><button class="btn primary" id="sv">Uložit</button><button class="btn ghost" data-close>Zrušit</button></div>`,
   (el) => (el.querySelector('#sv').onclick = async () => { closeSheet(); await patch(r, { admin_note: el.querySelector('#an').value }, 'Uloženo'); })),
@@ -299,7 +341,7 @@ function card(r) {
     ${r.admin_note ? `<div class="note" style="background:#FFF4E8">Moje poznámka: ${esc(r.admin_note)}</div>` : ''}
     <div class="tags">${tags.join('')}</div>
     <div class="money"><span>Nájem <b>${kc(r.rent_amount)}</b></span><span>Kauce <b>${kc(r.deposit_amount)}</b></span></div>
-    <div class="actions">${acts}<button class="btn ghost" data-a="mail" aria-label="Napsat e-mail">E-mail</button><button class="btn ghost" data-a="note" aria-label="Poznámka">Poznámka</button></div>
+    <div class="actions">${acts}${['pending', 'confirmed', 'returned'].includes(r.status) ? '<button class="btn ghost" data-a="edit">Upravit</button>' : ''}<button class="btn ghost" data-a="mail" aria-label="Napsat e-mail">E-mail</button><button class="btn ghost" data-a="note" aria-label="Poznámka">Poznámka</button></div>
   </article>`;
 }
 
