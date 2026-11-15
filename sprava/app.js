@@ -7,7 +7,7 @@ const sb = createClient(SB_URL, SB_KEY, { auth: { persistSession: true, storageK
 
 const FIRM = { name: 'Půjčovna Žďár', owner: 'Lubomír Šotek', ico: '71391134', addr: 'Světnov 201, 591 02 Žďár nad Sázavou', phone: '+420 777 097 902', email: 'info@pujcovna-zdar.cz' };
 const app = document.getElementById('app');
-const S = { tab: 'poptavky', items: [], res: [], calY: 0, calM: 0, archive: 'vse', hYear: 0, hQ: '', hist: [], push: 'unknown', user: null, settings: {} };
+const S = { tab: 'poptavky', items: [], res: [], calY: 0, calM: 0, archive: 'vse', hYear: 0, hQ: '', hist: [], ov: { st: 'aktivni', item: 'vse', q: '' }, push: 'unknown', user: null, settings: {} };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const kc = (n) => String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' Kč';
@@ -171,10 +171,11 @@ function accountSheet(after) {
 }
 function qrSheet(r, start) {
   if (!S.settings.account || !toIban(S.settings.account)) return accountSheet(() => qrSheet(r, start));
-  const opts = [['dep', 'Kauce', r.deposit_amount], ['rent', 'Nájem', r.rent_amount], ['both', 'Nájem + kauce', r.rent_amount + r.deposit_amount]];
+  const opts = [['dep', 'Kauce', r.deposit_amount], ['rent', 'Nájem', r.rent_amount], ['both', 'Nájem + kauce', r.rent_amount + r.deposit_amount], ['custom', 'Jiná částka', 0]];
   if (!start) start = r.deposit_status === 'none' ? 'dep' : 'rent';
   sheet(`<h3>QR platba</h3>
-    <div class="seg" id="qs">${opts.map(([k, l, a]) => `<button data-q="${k}" aria-pressed="${k === start}">${l} · ${kc(a)}</button>`).join('')}</div>
+    <div class="seg" id="qs">${opts.map(([k, l, a]) => `<button data-q="${k}" aria-pressed="${k === start}">${k === 'custom' ? l : l + ' · ' + kc(a)}</button>`).join('')}</div>
+    <label class="f" id="qcw" style="display:none">Částka (Kč)<input id="qc" type="number" inputmode="decimal" min="1" step="1" placeholder="např. 1500"></label>
     <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
       <img id="qimg" alt="QR kód k zaplacení" style="width:min(78vw,340px);height:auto;image-rendering:pixelated;background:#fff">
       <b id="qamt" style="font-family:var(--head);font-size:30px"></b>
@@ -183,13 +184,19 @@ function qrSheet(r, start) {
     <div class="actions"><button class="btn primary" id="qpaid">Zaplaceno</button><button class="btn ghost" id="qacc">Změnit účet</button><button class="btn ghost" data-close>Zavřít</button></div>`,
   (el) => {
     let cur = opts.find((o) => o[0] === start) || opts[0];
+    const amount = () => (cur[0] === 'custom' ? Math.round((+el.querySelector('#qc').value || 0) * 100) / 100 : cur[2]);
     const draw = async () => {
-      const spd = `SPD*1.0*ACC:${toIban(S.settings.account)}*AM:${cur[2].toFixed(2)}*CC:CZK*MSG:${ascii('Pujcovna Zdar ' + r.code + ' ' + cur[1]).slice(0, 60)}`;
-      el.querySelector('#qimg').src = await QRCode.toDataURL(spd, { margin: 2, width: 640, errorCorrectionLevel: 'M' });
-      el.querySelector('#qamt').textContent = kc(cur[2]);
+      const custom = cur[0] === 'custom', am = amount();
+      el.querySelector('#qcw').style.display = custom ? 'flex' : 'none';
+      el.querySelector('#qpaid').style.display = custom ? 'none' : '';
       el.querySelectorAll('[data-q]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.q === cur[0]));
+      if (!(am > 0)) { el.querySelector('#qimg').removeAttribute('src'); el.querySelector('#qamt').textContent = 'Zadejte částku'; return; }
+      const spd = `SPD*1.0*ACC:${toIban(S.settings.account)}*AM:${am.toFixed(2)}*CC:CZK*MSG:${ascii('Pujcovna Zdar ' + r.code + ' ' + cur[1]).slice(0, 60)}`;
+      el.querySelector('#qimg').src = await QRCode.toDataURL(spd, { margin: 2, width: 640, errorCorrectionLevel: 'M' });
+      el.querySelector('#qamt').textContent = custom ? (Number.isInteger(am) ? kc(am) : am.toLocaleString('cs-CZ') + ' Kč') : kc(am);
     };
-    el.querySelectorAll('[data-q]').forEach((b) => (b.onclick = () => { cur = opts.find((o) => o[0] === b.dataset.q); draw(); }));
+    el.querySelector('#qc').addEventListener('input', draw);
+    el.querySelectorAll('[data-q]').forEach((b) => (b.onclick = () => { cur = opts.find((o) => o[0] === b.dataset.q); draw(); if (cur[0] === 'custom') el.querySelector('#qc').focus(); }));
     el.querySelector('#qacc').onclick = () => accountSheet(() => qrSheet(r, cur[0]));
     el.querySelector('#qpaid').onclick = async () => {
       closeSheet();
@@ -397,6 +404,34 @@ function viewArchiv() {
   return `<h2>Archiv</h2><p class="muted" style="margin:-6px 0 12px">Nájem za rok ${year}: <b style="color:var(--ink)">${kc(sum)}</b></p><div class="seg">${seg}</div>` +
     (list.length ? list.map(card).join('') : `<div class="empty">Zatím prázdné.</div>`);
 }
+const OV_ST = [['aktivni', 'Aktivní'], ['vse', 'Vše'], ['pending', 'Čeká'], ['confirmed', 'Potvrzeno'], ['returned', 'Vráceno'], ['zruseno', 'Zrušeno']];
+function viewPrehled() {
+  const o = S.ov;
+  const stOk = { aktivni: (r) => ['pending', 'confirmed'].includes(r.status), vse: () => true, pending: (r) => r.status === 'pending', confirmed: (r) => r.status === 'confirmed', returned: (r) => r.status === 'returned', zruseno: (r) => ['rejected', 'cancelled'].includes(r.status) }[o.st];
+  const q = o.q.trim().toLowerCase();
+  let rows = S.res.filter(stOk).filter((r) => o.item === 'vse' || r.item_id === o.item)
+    .filter((r) => !q || [r.customer_name, r.phone, r.email, r.address, r.code, r.note, r.admin_note].some((v) => String(v || '').toLowerCase().includes(q)));
+  rows = rows.sort((a, b) => (o.st === 'aktivni' || o.st === 'pending' || o.st === 'confirmed' ? a.start_date.localeCompare(b.start_date) : b.start_date.localeCompare(a.start_date)));
+  const STL = { pending: 'Čeká', confirmed: 'Potvrzeno', returned: 'Vráceno', rejected: 'Odmítnuto', cancelled: 'Zrušeno' };
+  const stChips = OV_ST.map(([k, l]) => `<button data-ovst="${k}" aria-pressed="${o.st === k}">${l}</button>`).join('');
+  const itChips = [['vse', 'Vše']].concat(S.items.filter((i) => i.active).map((i) => [i.id, i.short_name || i.name])).map(([k, l]) => `<button data-ovit="${k}" aria-pressed="${o.item === k}">${esc(l)}</button>`).join('');
+  const live = rows.filter((r) => !['rejected', 'cancelled'].includes(r.status));
+  const sum = live.reduce((a, r) => a + r.rent_amount, 0);
+  let list = '', last = '';
+  rows.forEach((r) => {
+    const key = r.start_date.slice(0, 7);
+    if (key !== last) { const d = pd(r.start_date); list += `<h3 style="margin:16px 0 6px;text-transform:capitalize">${MONTHS[d.getMonth()]} ${d.getFullYear()}</h3>`; last = key; }
+    const cls = r.status === 'pending' ? 'new' : r.status === 'confirmed' ? 'ok' : r.status === 'returned' ? '' : 'warn';
+    list += `<button class="card ov" data-open="${r.id}" style="padding:10px 14px;margin-bottom:6px;text-align:left;border:0;width:100%;cursor:pointer;gap:4px">
+      <div style="display:flex;justify-content:space-between;gap:10px"><b>${esc(r.customer_name)}</b><b>${kc(r.rent_amount)}</b></div>
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><span>${esc(itemName(r.item_id))} · ${esc(range(r))} <span class="muted">(${daysWord(nDays(r))})</span></span><span class="tag ${cls}">${STL[r.status]}</span></div>
+      ${r.phone ? `<div class="muted" style="font-size:13px">${esc(r.phone)}${r.delivery ? ' · dovoz' : ''}</div>` : ''}</button>`;
+  });
+  return `<h2>Přehled</h2><div class="seg">${stChips}</div><div class="seg">${itChips}</div>
+    <input id="ovq" type="search" placeholder="Hledat jméno, telefon, e-mail, kód…" value="${esc(o.q)}" style="width:100%;margin-bottom:12px;min-height:44px;border:1.5px solid #CFCAC0;border-radius:12px;padding:0 14px;font:inherit;background:#fff">
+    <p class="muted" style="margin:0 2px 8px">Rezervací: <b style="color:var(--ink)">${rows.length}</b> · nájem celkem <b style="color:var(--ink)">${kc(sum)}</b></p>` +
+    (list || `<div class="empty">Nic nenalezeno.</div>`);
+}
 function viewKalendar() {
   const MON = ['leden', 'únor', 'březen', 'duben', 'květen', 'červen', 'červenec', 'srpen', 'září', 'říjen', 'listopad', 'prosinec'];
   const SHORT = { hrad: 'Hrad', cistic: 'Čistič', nosic: 'Nosič', box: 'Box', pricniky: 'Příčn.', odvlhcovac: 'Odvlh.' };
@@ -471,13 +506,14 @@ function newRes() {
 const ICONS = {
   poptavky: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H5.2L4 17.5z"/><path d="M8 9h8M8 12h5"/></svg>',
   aktualni: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 4l9 6.5"/><path d="M5 9.5V20h14V9.5"/></svg>',
+  prehled: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>',
   kalendar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
   archiv: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v11h14V9M10 13h4"/></svg>',
 };
 function render() {
   const pending = S.res.filter((r) => r.status === 'pending').length;
-  const views = { poptavky: viewPoptavky, aktualni: viewAktualni, kalendar: viewKalendar, archiv: viewArchiv };
-  const tabs = [['poptavky', 'Poptávky'], ['aktualni', 'Půjčeno'], ['kalendar', 'Kalendář'], ['archiv', 'Archiv']]
+  const views = { poptavky: viewPoptavky, aktualni: viewAktualni, prehled: viewPrehled, kalendar: viewKalendar, archiv: viewArchiv };
+  const tabs = [['poptavky', 'Poptávky'], ['aktualni', 'Půjčeno'], ['prehled', 'Přehled'], ['kalendar', 'Kalendář'], ['archiv', 'Archiv']]
     .map(([k, l]) => `<button data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${ICONS[k]}${l}${k === 'poptavky' && pending ? `<span class="badge">${pending}</span>` : ''}</button>`).join('');
   app.innerHTML = `<header class="top"><h1>Půjčovna Žďár</h1><button id="rf" aria-label="Obnovit">Obnovit</button><button id="lo">Odhlásit</button></header>
     <main>${S.tab === 'poptavky' ? pushBanner() : ''}${views[S.tab]()}</main>
@@ -487,14 +523,17 @@ function render() {
   document.body.classList.toggle('cal', S.tab === 'kalendar');
 }
 app.addEventListener('input', (e) => {
-  if (e.target.id !== 'hq') return;
-  S.hQ = e.target.value; const pos = e.target.selectionStart; render();
-  const el = document.getElementById('hq'); if (el) { el.focus(); el.setSelectionRange(pos, pos); }
+  if (e.target.id !== 'hq' && e.target.id !== 'ovq') return;
+  const id = e.target.id; if (id === 'hq') S.hQ = e.target.value; else S.ov.q = e.target.value;
+  const pos = e.target.selectionStart; render();
+  const el = document.getElementById(id); if (el) { el.focus(); el.setSelectionRange(pos, pos); }
 });
 app.addEventListener('click', async (e) => {
   const b = e.target.closest('button,[data-open]'); if (!b) return;
   if (b.dataset.tab) { S.tab = b.dataset.tab; render(); scrollTo(0, 0); return; }
   if (b.dataset.seg) { S.archive = b.dataset.seg; render(); return; }
+  if (b.dataset.ovst) { S.ov.st = b.dataset.ovst; render(); return; }
+  if (b.dataset.ovit) { S.ov.item = b.dataset.ovit; render(); return; }
   if (b.dataset.hy) { S.hYear = +b.dataset.hy; render(); return; }
   if (b.dataset.cal) { S.calM += +b.dataset.cal; if (S.calM < 0) { S.calM = 11; S.calY--; } if (S.calM > 11) { S.calM = 0; S.calY++; } render(); return; }
   if (b.dataset.open) {
