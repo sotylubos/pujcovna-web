@@ -330,7 +330,7 @@ def index():
 {FOOT}
 {config_script()}
 <script src="/js/web.js" defer></script>
-</body></html>
+<script src="/js/stats.js" defer></script></body></html>
 """
     (OUT / "index.html").write_text(body, encoding="utf-8")
 
@@ -408,12 +408,12 @@ def detail(it):
 {FOOT}
 {config_script()}
 <script src="/js/web.js" defer></script>
-</body></html>
+<script src="/js/stats.js" defer></script></body></html>
 """
     (OUT / f'{it["slug"]}.html').write_text(body, encoding="utf-8")
 
 def prose_page(fname, title, desc, inner):
-    body = head(title, desc, "/" + fname) + f'<main class="wrap sec"><div class="prose">{inner}</div></main>{FOOT}</body></html>'
+    body = head(title, desc, "/" + fname) + f'<main class="wrap sec"><div class="prose">{inner}</div></main>{FOOT}<script src="/js/stats.js" defer></script></body></html>'
     (OUT / fname).write_text(body, encoding="utf-8")
 
 PODMINKY = """<h1>Podmínky zapůjčení</h1>
@@ -430,7 +430,7 @@ GDPR = f"""<h1>Ochrana osobních údajů</h1>
 <h2>Jak dlouho údaje uchováváme</h2><p>Údaje z nevyřízených nebo odmítnutých poptávek mažeme nejpozději do 6 měsíců. Údaje k uskutečněným zápůjčkám uchováváme po dobu stanovenou daňovými a účetními předpisy.</p>
 <h2>Komu údaje předáváme</h2><p>Údaje neprodáváme ani nepředáváme k marketingu. Ukládáme je u poskytovatelů, kteří pro nás zajišťují provoz webu, databáze a e-mailu, a v nezbytném rozsahu je předáváme orgánům státní správy, pokud to ukládá zákon.</p>
 <h2>Vaše práva</h2><p>Máte právo na přístup ke svým údajům, jejich opravu nebo výmaz, omezení zpracování, přenositelnost a právo podat stížnost u Úřadu pro ochranu osobních údajů. Stačí nám napsat na <a href="mailto:{EMAIL}">{EMAIL}</a>.</p>
-<h2>Cookies</h2><p>Web nepoužívá reklamní ani analytické cookies. Videa se načítají z YouTube v režimu se zvýšenou ochranou soukromí až po kliknutí na přehrání.</p>"""
+<h2>Cookies</h2><p>Web nepoužívá žádné cookies. Návštěvnost počítáme anonymně a sami (bez cizích služeb): ukládá se jen navštívená stránka, doména, ze které návštěvník přišel, typ zařízení a náhodné číslo platné jen po dobu otevřeného okna prohlížeče. Neukládáme IP adresu ani nic, čím by šlo návštěvníka poznat. Videa se načítají z YouTube v režimu se zvýšenou ochranou soukromí až po kliknutí na přehrání.</p>"""
 
 FAVICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" rx="10" fill="#1F4D3A"/><g transform="translate(8 8)" fill="none" stroke="#FF7A3D" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 4l9 6.5"/><path d="M5 9.5V20h14V9.5"/><path d="M9.5 20v-5.5h5V20"/></g></svg>'
 
@@ -446,6 +446,6 @@ if __name__ == "__main__":
         f'<url><loc>{BASE}{pg}</loc><lastmod>{TODAY}</lastmod></url>\n' for pg in pages) + "</urlset>\n"
     (OUT / "sitemap.xml").write_text(sm, encoding="utf-8")
     (OUT / "robots.txt").write_text(f"User-agent: *\nDisallow: /sprava/\n\nSitemap: {BASE}/sitemap.xml\n", encoding="utf-8")
-    nf = head("Stránka nenalezena – Půjčovna Žďár", "Tato stránka neexistuje.", "/404.html").replace('content="index,follow,max-image-preview:large"', 'content="noindex"') + f'<main class="wrap sec"><div class="prose"><h1>Stránka nenalezena</h1><p>Tuhle stránku jsme nenašli. Podívejte se na <a href="/">nabídku půjčovny</a> nebo zavolejte na <a href="tel:{PHONE_LINK}">{PHONE}</a>.</p></div></main>{FOOT}</body></html>'
+    nf = head("Stránka nenalezena – Půjčovna Žďár", "Tato stránka neexistuje.", "/404.html").replace('content="index,follow,max-image-preview:large"', 'content="noindex"') + f'<main class="wrap sec"><div class="prose"><h1>Stránka nenalezena</h1><p>Tuhle stránku jsme nenašli. Podívejte se na <a href="/">nabídku půjčovny</a> nebo zavolejte na <a href="tel:{PHONE_LINK}">{PHONE}</a>.</p></div></main>{FOOT}<script src="/js/stats.js" defer></script></body></html>'
     (OUT / "404.html").write_text(nf, encoding="utf-8")
     print("hotovo")

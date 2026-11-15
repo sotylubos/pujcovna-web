@@ -7,7 +7,7 @@ const sb = createClient(SB_URL, SB_KEY, { auth: { persistSession: true, storageK
 
 const FIRM = { name: 'Půjčovna Žďár', owner: 'Lubomír Šotek', ico: '71391134', addr: 'Světnov 201, 591 02 Žďár nad Sázavou', phone: '+420 777 097 902', email: 'info@pujcovna-zdar.cz' };
 const app = document.getElementById('app');
-const S = { tab: 'poptavky', items: [], res: [], calY: 0, calM: 0, archive: 'vse', hYear: 0, hQ: '', hist: [], ov: { st: 'aktivni', item: 'vse', q: '' }, push: 'unknown', user: null, settings: {} };
+const S = { tab: 'poptavky', items: [], res: [], calY: 0, calM: 0, archive: 'vse', hYear: 0, hQ: '', hist: [], stats: null, statDays: 30, ov: { st: 'aktivni', item: 'vse', q: '' }, push: 'unknown', user: null, settings: {} };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const kc = (n) => String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' Kč';
@@ -41,6 +41,7 @@ async function boot() {
     document.getElementById('out').onclick = () => sb.auth.signOut().then(boot);
     return;
   }
+  try { localStorage.setItem('pj-notrack', '1'); } catch {} // vlastní návštěvy webu z tohoto zařízení se nepočítají
   const n = new Date(); S.calY = n.getFullYear(); S.calM = n.getMonth();
   await load();
   await pushInit();
@@ -467,6 +468,33 @@ function viewPrehled() {
     <p class="muted" style="margin:0 2px 8px">Rezervací: <b style="color:var(--ink)">${rows.length}</b> · nájem celkem <b style="color:var(--ink)">${kc(sum)}</b></p>` +
     (list || `<div class="empty">Nic nenalezeno.</div>`);
 }
+async function loadStats() {
+  const { data, error } = await sb.rpc('pj_stats', { p_days: S.statDays });
+  if (error) { toast('Statistiky se nenačetly: ' + error.message); return; }
+  S.stats = data; if (S.tab === 'navstevy') render();
+}
+const PAGE_NAMES = { '/': 'Úvod', '/skakaci-hrad': 'Skákací hrad', '/cistic-kobercu': 'Čistič koberců', '/nosic-kol': 'Nosič kol', '/stresni-box': 'Střešní box', '/pricniky': 'Příčníky', '/odvlhcovac': 'Odvlhčovač', '/podminky': 'Podmínky zapůjčení', '/gdpr': 'GDPR', '/404': 'Nenalezeno' };
+const DEVS = { mobile: 'Telefon', tablet: 'Tablet', desktop: 'Počítač', '?': 'Neznámé' };
+function viewNavstevy() {
+  const st = S.stats;
+  const chips = [7, 30, 90].map((d) => `<button data-sd="${d}" aria-pressed="${S.statDays === d}">${d} dní</button>`).join('');
+  if (!st) { loadStats(); return `<h2>Návštěvnost</h2><div class="seg">${chips}</div><div class="empty">Načítám…</div>`; }
+  const delta = (a, b) => (b > 0 ? `<span class="muted" style="font-size:13px">${a >= b ? '▲' : '▼'} ${Math.abs(Math.round(((a - b) / b) * 100))} % proti předchozím ${S.statDays} dnům</span>` : '<span class="muted" style="font-size:13px">&nbsp;</span>');
+  const tile = (l, v, d) => `<div class="card" style="flex:1;min-width:150px;padding:14px 16px;gap:2px"><span class="muted">${l}</span><b style="font-family:var(--head);font-size:32px">${v}</b>${d}</div>`;
+  const max = Math.max(1, ...st.daily.map((x) => x.views));
+  const bars = st.daily.map((x) => `<div title="${dmy(x.d)}: ${x.visits} návštěv, ${x.views} zobrazení" style="flex:1;min-width:2px;height:${Math.max(2, Math.round((x.views / max) * 100))}%;background:${x.d === todayIso() ? 'var(--accent)' : 'var(--green)'};border-radius:3px 3px 0 0"></div>`).join('');
+  const pageName = (pth) => { const k = pth === '/' ? '/' : pth.replace(/\.html$/, '').replace(/\/$/, ''); return PAGE_NAMES[k] || pth; };
+  const list = (rows, name, key, unit) => rows.length ? rows.map((x) => `<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid var(--line)"><span>${esc(name(x))}</span><b>${x[key]}${unit || ''}</b></div>`).join('') : '<div class="muted">Zatím nic.</div>';
+  const today = st.daily[st.daily.length - 1] || { views: 0, visits: 0 };
+  return `<h2>Návštěvnost</h2><div class="seg">${chips}</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">${tile('Návštěvy', st.visits, delta(st.visits, st.prev_visits))}${tile('Zobrazení stránek', st.views, delta(st.views, st.prev_views))}</div>
+    <div class="card"><b>Zobrazení po dnech</b><div style="display:flex;align-items:flex-end;gap:2px;height:110px">${bars}</div>
+      <div class="muted" style="display:flex;justify-content:space-between;font-size:12px"><span>${dm(st.daily[0].d)}</span><span>dnes: ${today.visits} návštěv</span></div></div>
+    <div class="card"><b>Nejnavštěvovanější stránky</b>${list(st.pages, (x) => pageName(x.path), 'views', '×')}</div>
+    <div class="card"><b>Odkud lidé přišli</b>${list(st.refs, (x) => x.ref || 'Přímo / nezjištěno', 'visits', '')}</div>
+    <div class="card"><b>Zařízení</b>${list(st.devices, (x) => DEVS[x.device] || x.device, 'visits', '')}</div>
+    <p class="muted" style="font-size:13px">Návštěva = jedno otevřené okno prohlížeče. Počítá se anonymně, bez cookies a IP adres. Vaše vlastní návštěvy z tohoto zařízení se nezapočítávají.</p>`;
+}
 function viewKalendar() {
   const MON = ['leden', 'únor', 'březen', 'duben', 'květen', 'červen', 'červenec', 'srpen', 'září', 'říjen', 'listopad', 'prosinec'];
   const SHORT = { hrad: 'Hrad', cistic: 'Čistič', nosic: 'Nosič', box: 'Box', pricniky: 'Příčn.', odvlhcovac: 'Odvlh.' };
@@ -543,12 +571,13 @@ const ICONS = {
   aktualni: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 4l9 6.5"/><path d="M5 9.5V20h14V9.5"/></svg>',
   prehled: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>',
   kalendar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
+  navstevy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
   archiv: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v11h14V9M10 13h4"/></svg>',
 };
 function render() {
   const pending = S.res.filter((r) => r.status === 'pending').length;
-  const views = { poptavky: viewPoptavky, aktualni: viewAktualni, prehled: viewPrehled, kalendar: viewKalendar, archiv: viewArchiv };
-  const tabs = [['poptavky', 'Poptávky'], ['aktualni', 'Půjčeno'], ['prehled', 'Přehled'], ['kalendar', 'Kalendář'], ['archiv', 'Archiv']]
+  const views = { poptavky: viewPoptavky, aktualni: viewAktualni, prehled: viewPrehled, navstevy: viewNavstevy, kalendar: viewKalendar, archiv: viewArchiv };
+  const tabs = [['poptavky', 'Poptávky'], ['aktualni', 'Půjčeno'], ['prehled', 'Přehled'], ['kalendar', 'Kalendář'], ['archiv', 'Archiv'], ['navstevy', 'Návštěvy']]
     .map(([k, l]) => `<button data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${ICONS[k]}${l}${k === 'poptavky' && pending ? `<span class="badge">${pending}</span>` : ''}</button>`).join('');
   app.innerHTML = `<header class="top"><h1>Půjčovna Žďár</h1><button id="rf" aria-label="Obnovit">Obnovit</button><button id="lo">Odhlásit</button></header>
     <main>${S.tab === 'poptavky' ? pushBanner() : ''}${views[S.tab]()}</main>
@@ -565,7 +594,8 @@ app.addEventListener('input', (e) => {
 });
 app.addEventListener('click', async (e) => {
   const b = e.target.closest('button,[data-open]'); if (!b) return;
-  if (b.dataset.tab) { S.tab = b.dataset.tab; render(); scrollTo(0, 0); return; }
+  if (b.dataset.sd) { S.statDays = +b.dataset.sd; S.stats = null; render(); return; }
+  if (b.dataset.tab) { S.tab = b.dataset.tab; if (S.tab === 'navstevy') S.stats = null; render(); scrollTo(0, 0); return; }
   if (b.dataset.seg) { S.archive = b.dataset.seg; render(); return; }
   if (b.dataset.ovst) { S.ov.st = b.dataset.ovst; render(); return; }
   if (b.dataset.ovit) { S.ov.item = b.dataset.ovit; render(); return; }
