@@ -265,6 +265,40 @@ const ACT = {
       done(v, w);
     };
   }),
+  unreturn: async (r) => {
+    if (!confirm('Vrátit rezervaci zpět do „Půjčeno“? Kauce se vrátí do stavu „u nás“.')) return;
+    await patch(r, { status: 'confirmed', deposit_returned_at: null, deposit_retained: 0, deposit_retained_reason: null,
+      deposit_status: ['returned', 'partial'].includes(r.deposit_status) ? 'received' : r.deposit_status }, 'Vráceno zpět do půjčeno');
+  },
+  depFix: (r) => sheet(`<h3>Stav kauce ${esc(kc(r.deposit_amount))}</h3>
+    <p class="muted" style="margin:0">Teď: ${{ none: 'kauce nepřijata', received: 'kauce u nás', returned: 'kauce vrácena', partial: 'část kauce zadržena' }[r.deposit_status] || r.deposit_status}</p>
+    <div class="choices">
+      <button class="btn ghost" data-d="none">Kauce nepřijata</button>
+      <button class="btn ghost" data-d="received">Kauce u nás (přijata)</button>
+      <button class="btn ghost" data-d="returned">Kauce vrácena celá</button>
+    </div>
+    <p class="muted" style="margin:6px 0 0;font-weight:600">Nebo část zadržena:</p>
+    <label class="f">Kolik zadrženo (Kč)<input id="ret" type="number" inputmode="numeric" min="1" max="${r.deposit_amount}" value="${r.deposit_retained || ''}"></label>
+    <label class="f">Důvod<input id="why" value="${esc(r.deposit_retained_reason || '')}"></label>
+    <div class="actions"><button class="btn accent" id="part">Uložit jako zadrženou část</button><button class="btn ghost" data-close>Zrušit</button></div>`,
+  (el) => {
+    const now = new Date().toISOString();
+    const save = async (st, retained, reason) => {
+      closeSheet();
+      await patch(r, {
+        deposit_status: st, deposit_retained: retained, deposit_retained_reason: reason || null,
+        deposit_received_at: st === 'none' ? null : (r.deposit_received_at || now),
+        deposit_returned_at: st === 'returned' || st === 'partial' ? (r.deposit_returned_at || now) : null,
+      }, 'Uloženo');
+    };
+    el.querySelectorAll('[data-d]').forEach((b) => (b.onclick = () => save(b.dataset.d, 0, '')));
+    el.querySelector('#part').onclick = () => {
+      const v = Math.round(+el.querySelector('#ret').value || 0), w = el.querySelector('#why').value.trim();
+      if (v <= 0 || v > r.deposit_amount) return toast('Zadejte částku do výše kauce');
+      if (!w) return toast('Napište důvod');
+      save('partial', v, w);
+    };
+  }),
   qr: (r) => qrSheet(r),
   cancel: async (r) => { if (confirm('Zrušit tuto rezervaci?')) await patch(r, { status: 'cancelled' }, 'Zrušeno'); },
   mail: (r) => mailSheet(r, r.status === 'pending' ? 'confirm' : r.deposit_status === 'received' ? 'depositIn' : 'confirm', 'Napsat zákazníkovi'),
@@ -336,9 +370,10 @@ function card(r) {
   if (r.status === 'pending') acts = `<button class="btn primary" data-a="confirm">Potvrdit</button><button class="btn danger" data-a="reject">Odmítnout</button>`;
   else if (r.status === 'confirmed') acts =
     `${r.paid_status === 'unpaid' ? '<button class="btn accent" data-a="paid">Zaplaceno</button>' : '<button class="btn ghost" data-a="paid">Platba</button>'}` +
-    `${r.deposit_status === 'none' ? '<button class="btn primary" data-a="depIn">Kauce převzata</button>' : ''}` +
+    `${r.deposit_status === 'none' ? '<button class="btn primary" data-a="depIn">Kauce převzata</button>' : '<button class="btn ghost" data-a="depFix">Kauce</button>'}` +
     `<button class="btn ghost" data-a="qr">QR platba</button>` +
     `<button class="btn ghost" data-a="back">Vráceno</button><button class="btn ghost" data-a="cancel">Zrušit</button>`;
+  else if (r.status === 'returned') acts = `<button class="btn ghost" data-a="paid">Platba</button><button class="btn ghost" data-a="depFix">Kauce</button><button class="btn accent" data-a="unreturn">Vrátit zpět do půjčeno</button>`;
   const contact = [r.phone && `<a href="tel:${esc(r.phone.replace(/\s/g, ''))}">${esc(r.phone)}</a>`, r.email && `<a href="mailto:${esc(r.email)}">${esc(r.email)}</a>`].filter(Boolean).join('');
   return `<article class="card" data-id="${r.id}">
     <div class="row"><div><p class="item">${esc(itemName(r.item_id))}</p><div class="dates">${esc(range(r))} <span class="muted" style="font-weight:500">· ${daysWord(n)}</span></div></div><span class="code">#${esc(r.code)}</span></div>
