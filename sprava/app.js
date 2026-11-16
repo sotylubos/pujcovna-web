@@ -486,7 +486,7 @@ const ACT = {
         const n = Math.round((pd(to) - pd(f)) / 86400000) + 1;
         if (recalc && !manual) { g('#er').value = n * it.price; g('#ek').value = it.deposit; }
         const clash = S.res.find((x) => x.id !== r.id && x.item_id === it.id && ['pending', 'confirmed'].includes(x.status) && x.start_date <= to && x.end_date >= f);
-        g('#esum').innerHTML = `${daysWord(n)}` + (clash ? `<br><span style="color:#8A2E0A;font-weight:700">Pozor, kříží se s rezervací ${esc(clash.customer_name)} (${esc(range(clash))}).</span>` : '') + closedWarn(f, to);
+        g('#esum').innerHTML = `${daysWord(n)}` + (clash ? `<br><span style="color:#8A2E0A;font-weight:700">Pozor, kříží se s rezervací ${esc(clash.customer_name)} (${esc(range(clash))}).</span>` : '') + closedWarn(f, to, it.id);
         return { it, f, to };
       };
       ['#ei', '#ef', '#et'].forEach((q) => g(q).addEventListener('change', () => { if (g('#et').value < g('#ef').value) g('#et').value = g('#ef').value; check(true); }));
@@ -671,11 +671,10 @@ function viewKalendar() {
   let rows = '';
   for (let d = 1; d <= cnt; d++) {
     const s = iso(new Date(y, m, d)), dow = new Date(y, m, d).getDay(), we = dow === 0 || dow === 6;
-    const cls = S.closures.find((c) => c.start_date <= s && c.end_date >= s);
     rows += `<div class="kr${we ? ' we' : ''}${s === t ? ' today' : ''}"><div class="kd"><b>${d}.</b><span>${WD[dow]}</span></div>`;
     for (const it of items) {
       const r = live.find((x) => x.item_id === it.id && x.start_date <= s && x.end_date >= s);
-      if (!r) { rows += cls ? '<div class="kc cl"></div>' : '<div class="kc"></div>'; continue; }
+      if (!r) { rows += S.closures.some((c) => (!c.item_id || c.item_id === it.id) && c.start_date <= s && c.end_date >= s) ? '<div class="kc cl"></div>' : '<div class="kc"></div>'; continue; }
       const st = r.start_date === s || d === 1, en = r.end_date === s || d === cnt;
       rows += `<button class="kc on ${r.status === 'pending' ? 'p' : r.status === 'returned' ? 'r' : ''}${st ? ' st' : ''}${en ? ' en' : ''}" data-open="${r.id}" aria-label="${esc(it.short_name)} ${d}. – ${esc(r.customer_name)}">${st ? first(r.customer_name) : ''}</button>`;
     }
@@ -687,34 +686,37 @@ function viewKalendar() {
     <div class="cal-nav"><button data-cal="-1" aria-label="Předchozí měsíc">‹</button><b>${MON[m]} ${y}</b><button data-cal="1" aria-label="Další měsíc">›</button></div>
     <div style="margin:0 0 8px"><button class="btn ghost" id="closeDays" style="min-height:40px">Zavřené dny${S.closures.some((c) => c.end_date >= t) ? ' (' + S.closures.filter((c) => c.end_date >= t).length + ')' : ''}</button></div>
     <div class="kgrid" style="--n:${items.length}">${head}${rows}</div>
-    <p class="muted" style="font-size:12px;margin:8px 0 0;display:flex;gap:14px;flex-wrap:wrap"><span><i class="lg" style="background:#1F4D3A"></i>potvrzeno</span><span><i class="lg" style="background:#FF7A3D"></i>čeká</span><span><i class="lg" style="background:#9DB5A8"></i>vráceno</span><span><i class="lg" style="background:repeating-linear-gradient(45deg,#cfc7ba,#cfc7ba 3px,#eee8de 3px,#eee8de 6px)"></i>zavřeno</span><span>Klepnutím otevřete</span></p></div>
+    <p class="muted" style="font-size:12px;margin:8px 0 0;display:flex;gap:14px;flex-wrap:wrap"><span><i class="lg" style="background:#1F4D3A"></i>potvrzeno</span><span><i class="lg" style="background:#FF7A3D"></i>čeká</span><span><i class="lg" style="background:#9DB5A8"></i>vráceno</span><span><i class="lg" style="background:repeating-linear-gradient(45deg,#cfc7ba,#cfc7ba 3px,#eee8de 3px,#eee8de 6px)"></i>zavřeno / servis</span><span>Klepnutím otevřete</span></p></div>
     <p class="muted" style="margin:10px 2px 0;font-size:13px">Tento měsíc: <b style="color:var(--ink)">${monthRes.length}</b> rezervací</p>`;
 }
 
 /* ---------- zavřené dny (pro všechny věci) ---------- */
-function closedWarn(f, to) {
-  const c = S.closures.find((x) => x.start_date <= to && x.end_date >= f);
+function closedWarn(f, to, itemId) {
+  const c = S.closures.find((x) => (!x.item_id || x.item_id === itemId) && x.start_date <= to && x.end_date >= f);
   return c ? `<br><span style="color:#8A2E0A;font-weight:700">Pozor, v tomto termínu je zavřeno (${esc(range(c))}${c.reason ? ', ' + esc(c.reason) : ''}).</span>` : '';
 }
+const closureWho = (c) => (c.item_id ? esc((S.items.find((i) => i.id === c.item_id) || {}).name || c.item_id) : 'Všechno');
 function closuresSheet() {
   const t = todayIso();
   const list = () => S.closures.filter((c) => c.end_date >= t).sort((a, b) => a.start_date.localeCompare(b.start_date));
   const body = () => `<h3>Zavřené dny</h3>
-    <p class="muted" style="margin:0;font-size:13px">V těchto dnech si na webu nikdo nemůže nic rezervovat (platí pro všechny věci). Už přijaté rezervace se tím nemění.</p>
-    ${list().length ? list().map((c) => `<div class="card" style="display:flex;align-items:center;gap:10px;justify-content:space-between"><div><b>${esc(range(c))}</b>${c.reason ? `<div class="muted" style="font-size:13px">${esc(c.reason)}</div>` : ''}</div><button class="btn danger" data-del="${c.id}" style="min-height:40px">Smazat</button></div>`).join('') : '<p class="muted" style="margin:0">Teď není zavřeno žádné období.</p>'}
+    <p class="muted" style="margin:0;font-size:13px">V těchto dnech si na webu nikdo nemůže rezervovat vybranou věc (nebo nic, když zavřete všechno). Už přijaté rezervace se tím nemění.</p>
+    ${list().length ? list().map((c) => `<div class="card" style="display:flex;align-items:center;gap:10px;justify-content:space-between"><div><b>${esc(range(c))}</b><div style="font-size:13px;font-weight:700;color:var(--green)">${closureWho(c)}</div>${c.reason ? `<div class="muted" style="font-size:13px">${esc(c.reason)}</div>` : ''}</div><button class="btn danger" data-del="${c.id}" style="min-height:40px">Smazat</button></div>`).join('') : '<p class="muted" style="margin:0">Teď není zavřeno žádné období.</p>'}
     <h3 style="margin-top:6px">Zavřít další dny</h3>
+    <label class="f">Co zavřít<select id="ci"><option value="">Všechno (dovolená, nejsem doma)</option>${S.items.filter((i) => i.active).map((i) => `<option value="${i.id}">Jen ${esc(i.name)} (např. servis)</option>`).join('')}</select></label>
     <div style="display:flex;gap:10px"><label class="f" style="flex:1">Od<input id="cf" type="date" value="${t}" min="${t}"></label><label class="f" style="flex:1">Do<input id="ct" type="date" value="${t}" min="${t}"></label></div>
-    <label class="f">Důvod (jen pro vás, nepovinné)<input id="cr" autocomplete="off" placeholder="např. dovolená"></label>
+    <label class="f">Důvod (jen pro vás, nepovinné)<input id="cr" autocomplete="off" placeholder="např. dovolená, servis"></label>
     <p id="cw" style="margin:0;font-size:13px"></p>
     <div class="actions"><button class="btn primary" id="csave">Zavřít tyto dny</button><button class="btn ghost" data-close>Hotovo</button></div>`;
   const init = (el) => {
     const g = (id) => el.querySelector(id);
     const warn = () => {
       const f = g('#cf').value, to = g('#ct').value;
-      const hit = f && to && to >= f ? S.res.filter((x) => ['pending', 'confirmed'].includes(x.status) && x.start_date <= to && x.end_date >= f) : [];
+      const it = g('#ci').value;
+      const hit = f && to && to >= f ? S.res.filter((x) => (!it || x.item_id === it) && ['pending', 'confirmed'].includes(x.status) && x.start_date <= to && x.end_date >= f) : [];
       g('#cw').innerHTML = hit.length ? `<span style="color:#8A2E0A;font-weight:700">Pozor, v tomto období už jsou rezervace: ${hit.map((x) => esc(x.customer_name) + ' (' + esc(range(x)) + ')').join(', ')}. Zůstanou platit, rozhodněte, jestli je zrušit.</span>` : '';
     };
-    ['#cf', '#ct'].forEach((s) => g(s).addEventListener('change', () => { if (g('#ct').value < g('#cf').value) g('#ct').value = g('#cf').value; warn(); }));
+    ['#ci', '#cf', '#ct'].forEach((s) => g(s).addEventListener('change', () => { if (g('#ct').value < g('#cf').value) g('#ct').value = g('#cf').value; warn(); }));
     warn();
     el.querySelectorAll('[data-del]').forEach((b) => (b.onclick = async () => {
       if (!confirm('Znovu otevřít tyto dny pro rezervace?')) return;
@@ -726,9 +728,9 @@ function closuresSheet() {
     g('#csave').onclick = async () => {
       const f = g('#cf').value, to = g('#ct').value;
       if (!f || !to || to < f) return toast('Zkontrolujte termín');
-      const { data, error } = await sb.from('pj_closures').insert({ start_date: f, end_date: to, reason: g('#cr').value.trim() || null }).select().single();
+      const { data, error } = await sb.from('pj_closures').insert({ item_id: g('#ci').value || null, start_date: f, end_date: to, reason: g('#cr').value.trim() || null }).select().single();
       if (error) return toast('Uložení se nepovedlo: ' + error.message);
-      S.closures.push(data); el.querySelector('.sheet').innerHTML = body(); init(el); render(); toast('Dny jsou zavřené');
+      S.closures.push(data); el.querySelector('.sheet').innerHTML = body(); init(el); render(); toast('Zavřeno');
     };
   };
   sheet(body(), init);
@@ -756,7 +758,7 @@ function newRes() {
       if (!f || !to || to < f) { g('#nsum').textContent = 'Zkontrolujte termín.'; return null; }
       const n = Math.round((pd(to) - pd(f)) / 86400000) + 1;
       const clash = S.res.find((x) => x.item_id === it.id && ['pending', 'confirmed'].includes(x.status) && x.start_date <= to && x.end_date >= f);
-      g('#nsum').innerHTML = `${daysWord(n)} · nájem <b>${kc(n * it.price)}</b> · kauce <b>${kc(it.deposit)}</b>` + (clash ? `<br><span style="color:#8A2E0A;font-weight:700">Pozor, kříží se s rezervací ${esc(clash.customer_name)} (${esc(range(clash))}).</span>` : '') + closedWarn(f, to);
+      g('#nsum').innerHTML = `${daysWord(n)} · nájem <b>${kc(n * it.price)}</b> · kauce <b>${kc(it.deposit)}</b>` + (clash ? `<br><span style="color:#8A2E0A;font-weight:700">Pozor, kříží se s rezervací ${esc(clash.customer_name)} (${esc(range(clash))}).</span>` : '') + closedWarn(f, to, it.id);
       return { it, f, to, n };
     };
     ['#ni', '#nf', '#nt'].forEach((s) => g(s).addEventListener('change', () => { if (g('#nt').value < g('#nf').value) g('#nt').value = g('#nf').value; calc(); }));
