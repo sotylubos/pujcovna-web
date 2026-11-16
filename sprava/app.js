@@ -7,7 +7,7 @@ const sb = createClient(SB_URL, SB_KEY, { auth: { persistSession: true, storageK
 
 const FIRM = { name: 'Půjčovna Žďár', owner: 'Lubomír Šotek', ico: '71391134', addr: 'Světnov 201, 591 02 Žďár nad Sázavou', phone: '+420 777 097 902', email: 'info@pujcovna-zdar.cz' };
 const app = document.getElementById('app');
-const S = { tab: 'poptavky', items: [], res: [], calY: 0, calM: 0, archive: 'vse', hYear: 0, hQ: '', hist: [], stats: null, statDays: 30, ov: { st: 'aktivni', item: 'vse', q: '' }, push: 'unknown', user: null, settings: {} };
+const S = { tab: 'poptavky', items: [], res: [], calY: 0, calM: 0, archive: 'vse', hYear: 0, hQ: '', hist: [], eet: {}, stats: null, statDays: 30, ov: { st: 'aktivni', item: 'vse', q: '' }, push: 'unknown', user: null, settings: {} };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const kc = (n) => String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' Kč';
@@ -23,7 +23,7 @@ const range = (r) => (r.start_date === r.end_date ? `${wd(r.start_date)} ${dm(r.
 const todayIso = () => iso(new Date());
 const itemName = (id) => S.items.find((i) => i.id === id)?.name || id;
 const nowCz = () => new Date().toLocaleDateString('cs-CZ');
-const PAID = { unpaid: 'Nezaplaceno', cash: 'Zaplaceno hotově', qr_onsite: 'Zaplaceno QR na místě', transfer: 'Zaplaceno převodem' };
+const PAID = { unpaid: 'Nezaplaceno', cash: 'Zaplaceno hotově', qr_onsite: 'Zaplaceno QR na místě', transfer: 'Zaplaceno převodem', deposit: 'Strženo z kauce' };
 
 function toast(msg) {
   const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t);
@@ -46,6 +46,7 @@ async function boot() {
   await load();
   await pushInit();
   render();
+  eetRetry();
   document.addEventListener('visibilitychange', () => { if (!document.hidden) load().then(render); });
 }
 function loginView() {
@@ -102,11 +103,47 @@ async function load() {
   if (!st.error) { S.settings = {}; st.data.forEach((x) => (S.settings[x.key] = x.value)); }
   if (it.error || rs.error) { toast('Načtení se nepovedlo'); return; }
   S.items = it.data; S.res = rs.data;
+  await loadEet();
+}
+const eetOn = () => ['playground', 'prod'].includes(S.settings.eet_mode);
+async function loadEet() {
+  S.eet = {};
+  if (!eetOn()) return;
+  const { data } = await sb.from('pj_eet').select('*').eq('env', S.settings.eet_mode).order('id', { ascending: false }).limit(1000);
+  (data || []).forEach((x) => { if (x.reservation_id) (S.eet[x.reservation_id] = S.eet[x.reservation_id] || []).unshift(x); });
+  S.eetAll = data || [];
+}
+async function eetCall(body) {
+  const { data, error } = await sb.functions.invoke('pj-eet', { body });
+  if (error) { let m = error.message; try { m = (await error.context.json()).error || m; } catch {} throw new Error(m); }
+  return data;
+}
+let eetRetried = false;
+async function eetRetry() {
+  if (eetRetried || !eetOn() || !(S.eetAll || []).some((x) => x.status === 'pending')) return;
+  eetRetried = true;
+  try { await eetCall({ action: 'retry' }); await loadEet(); render(); } catch {}
+}
+const EET_KEYS = ['paid_status', 'status', 'deposit_status', 'deposit_retained', 'rent_amount'];
+async function eetSync(r) {
+  if (!eetOn()) return;
+  try {
+    const d = await eetCall({ action: 'sync', reservation_id: r.id });
+    if (d && d.ok === false) return toast('EET: ' + d.message);
+    if (d && d.rows) S.eet[r.id] = d.rows;
+    for (const x of (d && d.sent) || []) {
+      if (x.status === 'ok') toast(`EET zaevidováno ${kc(x.amount)}`);
+      else toast(`EET: ${x.error || 'neodesláno'}`);
+    }
+    render();
+  } catch (e) { toast('EET: ' + (e.message || e)); }
 }
 async function patch(r, fields, msg) {
   const { data, error } = await sb.from('pj_reservations').update(fields).eq('id', r.id).select().single();
   if (error) { toast('Uložení se nepovedlo: ' + error.message); return null; }
-  Object.assign(r, data); render(); if (msg) toast(msg); return r;
+  Object.assign(r, data); render(); if (msg) toast(msg);
+  if (Object.keys(fields).some((k) => EET_KEYS.includes(k))) eetSync(r);
+  return r;
 }
 
 /* ---------- e-maily (zatím přes vlastní poštu) ---------- */
@@ -124,12 +161,18 @@ const T = {
     subject: `Potvrzení o převzetí kauce – rezervace ${r.code}`,
     body: `Dobrý den,\n\npotvrzujeme, že jsme dne ${nowCz()} od Vás převzali vratnou kauci ve výši ${kc(r.deposit_amount)}.\n\nZapůjčeno: ${itemName(r.item_id)}\nNájemce: ${r.customer_name}${r.address ? ', ' + r.address : ''}\nTermín: ${dmy(r.start_date)}${r.end_date !== r.start_date ? ' – ' + dmy(r.end_date) : ''}\nČíslo rezervace: ${r.code}\n\nKauci Vám vrátíme při vrácení zapůjčené věci v pořádku.` + sign + `\nIČ ${FIRM.ico}, ${FIRM.addr}`,
   }),
-  depositOut: (r) => ({
-    subject: `Vrácení kauce – rezervace ${r.code}`,
-    body: `Dobrý den,\n\nděkujeme za vrácení: ${itemName(r.item_id)}.\n\n` + (r.deposit_retained > 0
-      ? `Z kauce ${kc(r.deposit_amount)} jsme Vám dne ${nowCz()} vrátili ${kc(r.deposit_amount - r.deposit_retained)}. Částku ${kc(r.deposit_retained)} jsme si ponechali z důvodu: ${r.deposit_retained_reason || '[doplňte]'}.`
-      : `Potvrzujeme, že jsme Vám dne ${nowCz()} vrátili celou kauci ${kc(r.deposit_amount)}.`) + `\n\nBudeme rádi, když se zase ozvete.` + sign + `\nIČ ${FIRM.ico}, ${FIRM.addr}`,
-  }),
+  depositOut: (r) => {
+    const rent = r.paid_status === 'deposit' ? r.rent_amount : 0, ret = r.deposit_retained || 0, back = r.deposit_amount - rent - ret;
+    let t;
+    if (!rent && !ret) t = `Potvrzujeme, že jsme Vám dne ${nowCz()} vrátili celou kauci ${kc(r.deposit_amount)}.`;
+    else {
+      t = `Vyúčtování kauce ${kc(r.deposit_amount)}:\n`;
+      if (rent) t += `– nájem ${itemName(r.item_id)} (${daysWord(nDays(r))}): ${kc(rent)}\n`;
+      if (ret) t += `– ponecháno z důvodu: ${r.deposit_retained_reason || '[doplňte]'}: ${kc(ret)}\n`;
+      t += `\nDne ${nowCz()} jsme Vám vrátili ${kc(back)}.`;
+    }
+    return { subject: `Vrácení kauce – rezervace ${r.code}`, body: `Dobrý den,\n\nděkujeme za vrácení: ${itemName(r.item_id)}.\n\n` + t + `\n\nBudeme rádi, když se zase ozvete.` + sign + `\nIČ ${FIRM.ico}, ${FIRM.addr}` };
+  },
 };
 function mailSheet(r, kind, title) {
   if (!r.email) { toast('Zákazník nemá e-mail'); return; }
@@ -210,6 +253,102 @@ function qrSheet(r, start) {
   });
 }
 
+/* ---------- EET ---------- */
+const EET_KIND = { rent: 'Nájem', retained: 'Ponecháno z kauce', manual: 'Ručně', test: 'Test' };
+const eetRow = (x) => `<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line)">
+  <span><b>${kc(x.amount)}</b> · ${EET_KIND[x.kind] || x.kind}${x.note ? ' – ' + esc(x.note) : ''}<br><span class="muted" style="font-size:12px">${new Date(x.dat_trzby).toLocaleString('cs-CZ')} · č. ${esc(x.porad_cis)}${x.pok ? '<br>POK ' + esc(x.pok) : ''}${x.error ? '<br><span style="color:var(--warn)">' + esc(x.error) + '</span>' : ''}</span></span>
+  <span class="tag ${x.status === 'ok' ? 'ok' : 'warn'}" style="align-self:flex-start">${x.status === 'ok' ? 'Zaevidováno' : x.status === 'error' ? 'Chyba' : 'Čeká'}</span></div>`;
+function eetResSheet(r) {
+  const rows = S.eet[r.id] || [];
+  sheet(`<h3>EET · #${esc(r.code)}</h3>
+    ${rows.length ? rows.map(eetRow).join('') : '<p class="muted" style="margin:0">K této rezervaci zatím nic zaevidováno.</p>'}
+    <p class="muted" style="margin:6px 0 0;font-size:13px">Tržby se evidují samy podle platby: nájem hotově nebo QR na místě, nájem stržený z kauce a částka ponechaná z kauce. Když platbu opravíte, odešle se rozdíl.</p>
+    <p style="margin:8px 0 0;font-weight:600">Zaevidovat ručně (např. platba Jinou částkou)</p>
+    <label class="f">Částka (Kč, vrácení se zápornou částkou)<input id="ma" type="number" inputmode="decimal" step="0.01"></label>
+    <label class="f">Poznámka<input id="mn"></label>
+    <div class="actions"><button class="btn primary" id="msend">Zaevidovat</button><button class="btn ghost" id="msync">Zkontrolovat a odeslat</button><button class="btn ghost" data-close>Zavřít</button></div>`,
+  (el) => {
+    el.querySelector('#msync').onclick = async () => { closeSheet(); await eetSync(r); };
+    el.querySelector('#msend').onclick = async () => {
+      const a = +el.querySelector('#ma').value;
+      if (!a) return toast('Zadejte částku');
+      if (!confirm(`Zaevidovat tržbu ${a.toLocaleString('cs-CZ')} Kč?`)) return;
+      closeSheet();
+      try {
+        const d = await eetCall({ action: 'manual', reservation_id: r.id, amount: a, note: el.querySelector('#mn').value.trim() });
+        if (d.ok === false) return toast('EET: ' + d.message);
+        toast(d.row?.status === 'ok' ? 'EET zaevidováno' : 'EET: ' + (d.row?.error || 'čeká'));
+        await loadEet(); render();
+      } catch (e) { toast('EET: ' + e.message); }
+    };
+  });
+}
+async function saveSetting(key, value) {
+  const { error } = await sb.from('pj_settings').upsert({ key, value, updated_at: new Date().toISOString() });
+  if (error) throw error; S.settings[key] = value;
+}
+async function eetSettings() {
+  sheet('<h3>EET</h3><p class="muted">Načítám…</p>');
+  let st;
+  try { st = await eetCall({ action: 'status' }); } catch (e) { closeSheet(); return toast('EET: ' + e.message); }
+  const mode = S.settings.eet_mode || 'off', c = st.cert?.prod;
+  const modes = [['off', 'Vypnuto'], ['playground', 'Zkušebně'], ['prod', 'Ostře']].map(([k, l]) => `<button data-em="${k}" aria-pressed="${mode === k}">${l}</button>`).join('');
+  const recent = (S.eetAll || []).slice(0, 15);
+  sheet(`<h3>Evidence tržeb (EET)</h3>
+    <div class="seg" style="margin:0">${modes}</div>
+    <p class="muted" style="margin:0;font-size:13px">${mode === 'prod' ? 'Tržby se posílají finanční správě naostro.' : mode === 'playground' ? 'Zkušební režim: tržby jdou na testovací server finanční správy a nic se doopravdy neeviduje.' : 'Nic se neodesílá.'}</p>
+    <label class="f">Číslo evidenční jednotky (z DIS+)<input id="ej" inputmode="numeric" value="${esc(S.settings.eet_jednotka || '')}" placeholder="např. 1"></label>
+    <div class="card" style="background:var(--bg);margin:0;padding:12px 14px;gap:6px"><b>Pokladní certifikát</b>
+      ${c ? `<span>${esc(c.eic)} · platí do <b>${new Date(c.valid_to).toLocaleDateString('cs-CZ')}</b></span><span class="muted" style="font-size:12px">nahrán ${new Date(c.uploaded_at).toLocaleDateString('cs-CZ')}</span>` : '<span class="muted">Zatím nenahrán. Ve zkušebním režimu se použije testovací certifikát finanční správy.</span>'}
+      <label class="f">Soubor certifikátu (.p12)<input id="ef" type="file" accept=".p12,.pfx,application/x-pkcs12"></label>
+      <label class="f">Heslo k certifikátu<input id="ep" type="password" autocomplete="off"></label>
+      <button class="btn ghost" id="eup">Nahrát certifikát</button></div>
+    <div class="actions"><button class="btn primary" id="esv">Uložit</button><button class="btn ghost" id="etest">Vyzkoušet spojení</button>${(S.eetAll || []).some((x) => x.status === 'pending') ? '<button class="btn accent" id="eretry">Odeslat čekající</button>' : ''}</div>
+    ${recent.length ? '<b>Poslední tržby</b>' + recent.map(eetRow).join('') : ''}
+    <button class="btn ghost" data-close>Zavřít</button>`,
+  (el) => {
+    let m = mode;
+    el.querySelectorAll('[data-em]').forEach((b) => (b.onclick = () => { m = b.dataset.em; el.querySelectorAll('[data-em]').forEach((x) => x.setAttribute('aria-pressed', x.dataset.em === m)); }));
+    el.querySelector('#esv').onclick = async () => {
+      const j = el.querySelector('#ej').value.trim();
+      if (m !== 'off' && !/^[1-9][0-9]{0,8}$/.test(j)) return toast('Vyplňte číslo evidenční jednotky (jen číslice)');
+      if (m === 'prod' && mode !== 'prod' && !c) return toast('Pro ostrý režim nejdřív nahrajte pokladní certifikát');
+      if (m === 'prod' && mode !== 'prod' && !confirm('Zapnout ostrou evidenci tržeb? Od teď se platby hotově a QR na místě budou posílat finanční správě.')) return;
+      try {
+        await saveSetting('eet_jednotka', j);
+        if (m !== mode) { await saveSetting('eet_since', new Date().toISOString()); await saveSetting('eet_mode', m); }
+        closeSheet(); await loadEet(); render(); toast('Uloženo');
+      } catch (e) { toast('Uložení se nepovedlo: ' + e.message); }
+    };
+    el.querySelector('#eup').onclick = async () => {
+      const f = el.querySelector('#ef').files[0], pw = el.querySelector('#ep').value;
+      if (!f) return toast('Vyberte soubor .p12');
+      if (!pw) return toast('Zadejte heslo k certifikátu');
+      const buf = new Uint8Array(await f.arrayBuffer()); let bin = ''; buf.forEach((x) => (bin += String.fromCharCode(x)));
+      try {
+        const d = await eetCall({ action: 'cert', env: 'prod', p12: btoa(bin), password: pw });
+        if (d.ok === false) return toast('Certifikát: ' + d.message);
+        toast(`Certifikát ${d.eic} nahrán`); eetSettings();
+      } catch (e) { toast('Certifikát: ' + e.message); }
+    };
+    el.querySelector('#etest').onclick = async () => {
+      const env = m === 'prod' ? 'prod' : 'playground';
+      const b = el.querySelector('#etest'); b.disabled = true; b.textContent = 'Zkouším…';
+      try {
+        const j = el.querySelector('#ej').value.trim();
+        if (j && j !== S.settings.eet_jednotka) await saveSetting('eet_jednotka', j);
+        const d = await eetCall({ action: 'test', env });
+        if (d.ok) toast(`Spojení funguje (${env === 'prod' ? 'ostrý server' : 'testovací server'}, ${d.eic})` + (d.warnings?.length ? ' · varování: ' + d.warnings.map((w) => w.text || w.kod).join(', ') : ''));
+        else toast('Spojení nefunguje: ' + (d.message || 'kód ' + d.kod));
+      } catch (e) { toast('Spojení nefunguje: ' + e.message); }
+      b.disabled = false; b.textContent = 'Vyzkoušet spojení';
+    };
+    el.querySelector('#eretry')?.addEventListener('click', async () => {
+      try { await eetCall({ action: 'retry' }); await loadEet(); closeSheet(); render(); toast('Odesláno'); } catch (e) { toast('EET: ' + e.message); }
+    });
+  });
+}
+
 /* ---------- sheet ---------- */
 function sheet(html, init) {
   closeSheet();
@@ -232,6 +371,7 @@ const ACT = {
       <button class="btn ghost" data-p="cash">Hotově</button>
       <button class="btn ghost" data-p="qr_onsite">QR kódem na místě</button>
       <button class="btn ghost" data-p="transfer">Převodem předem</button>
+      ${r.deposit_status !== 'none' ? '<button class="btn ghost" data-p="deposit">Strhnu z kauce při vrácení</button>' : ''}
       ${r.paid_status !== 'unpaid' ? '<button class="btn danger" data-p="unpaid">Zrušit zaplacení</button>' : ''}
     </div>
     <p class="muted" style="margin:0;font-size:13px">Platby hotově a QR na místě se budou posílat do EET, až bude napojené.</p>`,
@@ -244,32 +384,48 @@ const ACT = {
     el.querySelector('#dcash').onclick = async () => { closeSheet(); if (await patch(r, { deposit_status: 'received', deposit_received_at: new Date().toISOString() }, 'Kauce převzata')) mailSheet(r, 'depositIn', 'Poslat potvrzení o převzetí kauce'); };
     el.querySelector('#dqr').onclick = () => qrSheet(r, 'dep');
   }),
-  back: (r) => sheet(`<h3>Vráceno: ${esc(itemName(r.item_id))}</h3>
-    <p style="margin:0">Kauce ${esc(kc(r.deposit_amount))}</p>
-    <div class="choices"><button class="btn primary" id="full">Vrátit celou kauci</button></div>
-    <p class="muted" style="margin:6px 0 0;font-weight:600">Nebo si část nechat:</p>
-    <label class="f">Kolik si necháte (Kč)<input id="ret" type="number" inputmode="numeric" min="0" max="${r.deposit_amount}"></label>
-    <label class="f">Důvod<input id="why" placeholder="např. poškozená klouzačka"></label>
-    <div class="actions"><button class="btn accent" id="part">Uložit a vrátit zbytek</button><button class="btn ghost" data-close>Zrušit</button></div>`,
-  (el) => {
-    const done = async (retained, reason) => {
-      closeSheet();
-      const f = { status: 'returned', deposit_returned_at: new Date().toISOString(), deposit_retained: retained, deposit_retained_reason: reason || null,
-        deposit_status: r.deposit_status === 'none' ? 'none' : retained > 0 ? 'partial' : 'returned' };
-      if (await patch(r, f, 'Uloženo') && r.deposit_status !== 'none') mailSheet(r, 'depositOut', 'Poslat potvrzení o vrácení kauce');
-    };
-    el.querySelector('#full').onclick = () => done(0, '');
-    el.querySelector('#part').onclick = () => {
-      const v = Math.round(+el.querySelector('#ret').value || 0), w = el.querySelector('#why').value.trim();
-      if (v <= 0 || v > r.deposit_amount) return toast('Zadejte částku do výše kauce');
-      if (!w) return toast('Napište důvod');
-      done(v, w);
-    };
-  }),
+  back: (r) => {
+    const hasDep = r.deposit_status === 'received';
+    const canDeduct = hasDep && !['cash', 'qr_onsite', 'transfer'].includes(r.paid_status);
+    sheet(`<h3>Vráceno: ${esc(itemName(r.item_id))}</h3>
+    ${hasDep ? `<p style="margin:0">Kauce u nás: <b>${esc(kc(r.deposit_amount))}</b> · nájem ${esc(kc(r.rent_amount))} ${r.paid_status === 'unpaid' || r.paid_status === 'deposit' ? '<span class="muted">(nezaplacen)</span>' : `<span class="muted">(${esc(PAID[r.paid_status].toLowerCase())})</span>`}</p>` : `<p class="muted" style="margin:0">Kauce nebyla převzata.</p>`}
+    ${canDeduct ? `<label style="display:flex;gap:10px;align-items:center;min-height:44px;font-weight:600"><input id="ded" type="checkbox" style="width:22px;height:22px"${r.paid_status !== 'unpaid' || r.deposit_amount >= r.rent_amount ? ' checked' : ''}> Strhnout nájem ${esc(kc(r.rent_amount))} z kauce</label>` : ''}
+    ${hasDep ? `<label class="f">Ponechat si navíc kvůli škodě (Kč)<input id="ret" type="number" inputmode="numeric" min="0" max="${r.deposit_amount}" placeholder="0"></label>
+    <label class="f" id="whyw" style="display:none">Důvod<input id="why" placeholder="např. poškozená klouzačka"></label>
+    <div class="card" style="background:var(--gsoft);margin:0;padding:12px 14px"><span class="muted">Vracíte zákazníkovi</span><b id="back" style="font-family:var(--head);font-size:28px"></b></div>` : ''}
+    <div class="actions"><button class="btn primary" id="ok">Uložit vrácení</button><button class="btn ghost" data-close>Zrušit</button></div>`,
+    (el) => {
+      const g = (q) => el.querySelector(q);
+      const calc = () => {
+        if (!hasDep) return null;
+        const ded = g('#ded')?.checked ? r.rent_amount : 0, ret = Math.round(+g('#ret').value || 0);
+        g('#whyw').style.display = ret > 0 ? 'flex' : 'none';
+        const back = r.deposit_amount - ded - ret;
+        g('#back').textContent = kc(back); g('#back').style.color = back < 0 ? 'var(--warn)' : '';
+        return { ded, ret, back };
+      };
+      if (hasDep) { g('#ret').addEventListener('input', calc); g('#ded')?.addEventListener('change', calc); calc(); }
+      g('#ok').onclick = async () => {
+        const f = { status: 'returned', deposit_returned_at: new Date().toISOString(), deposit_retained: 0, deposit_retained_reason: null };
+        if (hasDep) {
+          const c = calc(), why = g('#why').value.trim();
+          if (c.back < 0) return toast('Stržená částka je vyšší než kauce');
+          if (c.ret > 0 && !why) return toast('Napište důvod, proč si část necháváte');
+          f.deposit_retained = c.ret; f.deposit_retained_reason = c.ret > 0 ? why : null;
+          f.deposit_status = c.ret > 0 ? 'partial' : 'returned';
+          if (c.ded) { f.paid_status = 'deposit'; f.paid_at = new Date().toISOString(); }
+          else if (r.paid_status === 'deposit') { f.paid_status = 'unpaid'; f.paid_at = null; }
+        }
+        closeSheet();
+        if (await patch(r, f, 'Uloženo') && hasDep) mailSheet(r, 'depositOut', 'Poslat vyúčtování kauce');
+      };
+    });
+  },
   unreturn: async (r) => {
     if (!confirm('Vrátit rezervaci zpět do „Půjčeno“? Kauce se vrátí do stavu „u nás“.')) return;
     await patch(r, { status: 'confirmed', deposit_returned_at: null, deposit_retained: 0, deposit_retained_reason: null,
-      deposit_status: ['returned', 'partial'].includes(r.deposit_status) ? 'received' : r.deposit_status }, 'Vráceno zpět do půjčeno');
+      deposit_status: ['returned', 'partial'].includes(r.deposit_status) ? 'received' : r.deposit_status,
+      ...(r.paid_status === 'deposit' ? { paid_status: 'unpaid', paid_at: null } : {}) }, 'Vráceno zpět do půjčeno');
   },
   depFix: (r) => sheet(`<h3>Stav kauce ${esc(kc(r.deposit_amount))}</h3>
     <p class="muted" style="margin:0">Teď: ${{ none: 'kauce nepřijata', received: 'kauce u nás', returned: 'kauce vrácena', partial: 'část kauce zadržena' }[r.deposit_status] || r.deposit_status}</p>
@@ -300,6 +456,7 @@ const ACT = {
       save('partial', v, w);
     };
   }),
+  eet: (r) => eetResSheet(r),
   qr: (r) => qrSheet(r),
   cancel: async (r) => { if (confirm('Zrušit tuto rezervaci?')) await patch(r, { status: 'cancelled' }, 'Zrušeno'); },
   mail: (r) => mailSheet(r, r.status === 'pending' ? 'confirm' : r.deposit_status === 'received' ? 'depositIn' : 'confirm', 'Napsat zákazníkovi'),
@@ -367,6 +524,13 @@ function card(r) {
     if (r.deposit_status === 'returned') tags.push('<span class="tag">Kauce vrácena</span>');
     if (r.deposit_status === 'partial') tags.push(`<span class="tag warn">Zadrženo ${kc(r.deposit_retained)}</span>`);
   }
+  const er = S.eet[r.id] || [];
+  if (er.length) {
+    const sum = er.filter((x) => x.status === 'ok').reduce((a, x) => a + Number(x.amount), 0);
+    if (er.some((x) => x.status === 'error')) tags.push('<span class="tag warn">EET chyba</span>');
+    else if (er.some((x) => x.status === 'pending')) tags.push('<span class="tag warn">EET čeká na odeslání</span>');
+    else tags.push(`<span class="tag ok">EET ✓ ${kc(sum)}</span>`);
+  }
   let acts = '';
   if (r.status === 'pending') acts = `<button class="btn primary" data-a="confirm">Potvrdit</button><button class="btn danger" data-a="reject">Odmítnout</button>`;
   else if (r.status === 'confirmed') acts =
@@ -384,7 +548,7 @@ function card(r) {
     ${r.admin_note ? `<div class="note" style="background:#FFF4E8">Moje poznámka: ${esc(r.admin_note)}</div>` : ''}
     <div class="tags">${tags.join('')}</div>
     <div class="money"><span>Nájem <b>${kc(r.rent_amount)}</b></span><span>Kauce <b>${kc(r.deposit_amount)}</b></span></div>
-    <div class="actions">${acts}${['pending', 'confirmed', 'returned'].includes(r.status) ? '<button class="btn ghost" data-a="edit">Upravit</button>' : ''}<button class="btn ghost" data-a="mail" aria-label="Napsat e-mail">E-mail</button><button class="btn ghost" data-a="note" aria-label="Poznámka">Poznámka</button></div>
+    <div class="actions">${acts}${['pending', 'confirmed', 'returned'].includes(r.status) ? '<button class="btn ghost" data-a="edit">Upravit</button>' : ''}<button class="btn ghost" data-a="mail" aria-label="Napsat e-mail">E-mail</button><button class="btn ghost" data-a="note" aria-label="Poznámka">Poznámka</button>${eetOn() && ['confirmed', 'returned'].includes(r.status) ? '<button class="btn ghost" data-a="eet">EET</button>' : ''}</div>
   </article>`;
 }
 
@@ -579,7 +743,7 @@ function render() {
   const views = { poptavky: viewPoptavky, aktualni: viewAktualni, prehled: viewPrehled, navstevy: viewNavstevy, kalendar: viewKalendar, archiv: viewArchiv };
   const tabs = [['poptavky', 'Poptávky'], ['aktualni', 'Půjčeno'], ['prehled', 'Přehled'], ['kalendar', 'Kalendář'], ['archiv', 'Archiv'], ['navstevy', 'Návštěvy']]
     .map(([k, l]) => `<button data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${ICONS[k]}${l}${k === 'poptavky' && pending ? `<span class="badge">${pending}</span>` : ''}</button>`).join('');
-  app.innerHTML = `<header class="top"><h1>Půjčovna Žďár</h1><button id="rf" aria-label="Obnovit">Obnovit</button><button id="lo">Odhlásit</button></header>
+  app.innerHTML = `<header class="top"><h1>Půjčovna Žďár</h1><button id="eetb" aria-label="Nastavení EET">EET</button><button id="rf" aria-label="Obnovit">Obnovit</button><button id="lo">Odhlásit</button></header>
     <main>${S.tab === 'poptavky' ? pushBanner() : ''}${views[S.tab]()}</main>
     <button class="fab" id="add"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Rezervace</button>
     <nav class="tabs">${tabs}</nav>`;
@@ -607,6 +771,7 @@ app.addEventListener('click', async (e) => {
       (el) => el.addEventListener('click', (ev) => { const a = ev.target.closest('[data-a]'); if (a) { closeSheet(); ACT[a.dataset.a](r); } }));
     return;
   }
+  if (b.id === 'eetb') return eetSettings();
   if (b.id === 'pushOn') return pushOn();
   if (b.id === 'add') return newRes();
   if (b.id === 'rf') { await load(); render(); toast('Aktualizováno'); return; }
