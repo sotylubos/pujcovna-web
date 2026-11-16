@@ -460,7 +460,23 @@ const ACT = {
   }),
   eet: (r) => eetResSheet(r),
   qr: (r) => qrSheet(r),
-  cancel: async (r) => { if (confirm('Zrušit tuto rezervaci?')) await patch(r, { status: 'cancelled' }, 'Zrušeno'); },
+  cancel: (r) => {
+    const paid = r.paid_status !== 'unpaid', dep = r.deposit_status === 'received';
+    sheet(`<h3>Storno rezervace</h3>
+      <p style="margin:0"><b>${esc(r.customer_name)}</b>, ${esc(itemName(r.item_id))}, ${esc(range(r))}</p>
+      <p class="muted" style="margin:0;font-size:13px">${esc(itemName(r.item_id))} bude v kalendáři zase volný a rezervace přejde do Archivu (Zrušeno).</p>
+      ${paid ? `<label style="display:flex;gap:10px;align-items:center;min-height:44px"><input id="cp" type="checkbox" checked style="width:20px;height:20px"> Nájem ${esc(kc(r.rent_amount))} se zákazníkovi vrací, zrušit zaplacení</label>` : ''}
+      ${dep ? `<label style="display:flex;gap:10px;align-items:center;min-height:44px"><input id="cd" type="checkbox" checked style="width:20px;height:20px"> Kauci ${esc(kc(r.deposit_amount))} jsem zákazníkovi vrátil</label>` : ''}
+      <div class="actions"><button class="btn danger" id="cok">Stornovat</button><button class="btn ghost" data-close>Zpět</button></div>`,
+    (el) => {
+      el.querySelector('#cok').onclick = async () => {
+        const f = { status: 'cancelled' };
+        if (paid && el.querySelector('#cp').checked) { f.paid_status = 'unpaid'; f.paid_at = null; }
+        if (dep && el.querySelector('#cd').checked) { f.deposit_status = 'returned'; f.deposit_returned_at = new Date().toISOString(); f.deposit_retained = 0; }
+        closeSheet(); await patch(r, f, 'Rezervace stornována');
+      };
+    });
+  },
   mail: (r) => mailSheet(r, r.status === 'pending' ? 'confirm' : r.deposit_status === 'received' ? 'depositIn' : 'confirm', 'Napsat zákazníkovi'),
   edit: (r) => {
     const opts = S.items.map((i) => `<option value="${i.id}"${i.id === r.item_id ? ' selected' : ''}>${esc(i.name)}</option>`).join('');
@@ -516,7 +532,7 @@ function card(r) {
   if (r.status === 'pending') tags.push('<span class="tag new">Nová poptávka</span>');
   if (r.status === 'confirmed') tags.push(r.start_date <= t && r.end_date >= t ? '<span class="tag ok">Právě půjčeno</span>' : r.end_date < t ? '<span class="tag warn">Mělo být vráceno</span>' : '<span class="tag ok">Potvrzeno</span>');
   if (r.status === 'rejected') tags.push('<span class="tag">Odmítnuto</span>');
-  if (r.status === 'cancelled') tags.push('<span class="tag">Zrušeno</span>');
+  if (r.status === 'cancelled') tags.push('<span class="tag">Storno</span>');
   if (r.status === 'returned') tags.push('<span class="tag ok">Vráceno</span>');
   if (r.source === 'phone') tags.push('<span class="tag">Telefonem</span>');
   if (r.delivery) tags.push('<span class="tag warn">Dovoz</span>');
@@ -534,12 +550,12 @@ function card(r) {
     else tags.push(`<span class="tag ok">EET ✓ ${kc(sum)}</span>`);
   }
   let acts = '';
-  if (r.status === 'pending') acts = `<button class="btn primary" data-a="confirm">Potvrdit</button><button class="btn danger" data-a="reject">Odmítnout</button>`;
+  if (r.status === 'pending') acts = `<button class="btn primary" data-a="confirm">Potvrdit</button><button class="btn danger" data-a="reject">Odmítnout</button><button class="btn ghost" data-a="cancel">Storno</button>`;
   else if (r.status === 'confirmed') acts =
     `${r.paid_status === 'unpaid' ? '<button class="btn accent" data-a="paid">Zaplaceno</button>' : '<button class="btn ghost" data-a="paid">Platba</button>'}` +
     `${r.deposit_status === 'none' ? '<button class="btn primary" data-a="depIn">Kauce převzata</button>' : '<button class="btn ghost" data-a="depFix">Kauce</button>'}` +
     `<button class="btn ghost" data-a="qr">QR platba</button>` +
-    `<button class="btn ghost" data-a="back">Vráceno</button><button class="btn ghost" data-a="cancel">Zrušit</button>`;
+    `<button class="btn ghost" data-a="back">Vráceno</button><button class="btn ghost" data-a="cancel">Storno</button>`;
   else if (r.status === 'returned') acts = `<button class="btn ghost" data-a="paid">Platba</button><button class="btn ghost" data-a="depFix">Kauce</button><button class="btn accent" data-a="unreturn">Vrátit zpět do půjčeno</button>`;
   const contact = [r.phone && `<a href="tel:${esc(r.phone.replace(/\s/g, ''))}">${esc(r.phone)}</a>`, r.email && `<a href="mailto:${esc(r.email)}">${esc(r.email)}</a>`].filter(Boolean).join('');
   return `<article class="card" data-id="${r.id}">
@@ -598,7 +614,7 @@ function viewHistorie() {
 }
 function viewArchiv() {
   const f = { vse: () => true, vraceno: (r) => r.status === 'returned', odmitnuto: (r) => r.status === 'rejected' || r.status === 'cancelled' };
-  const seg = [['vse', 'Vše'], ['vraceno', 'Vráceno'], ['odmitnuto', 'Zrušeno'], ['historie', 'Historie']].map(([k, l]) => `<button data-seg="${k}" aria-pressed="${S.archive === k}">${l}</button>`).join('');
+  const seg = [['vse', 'Vše'], ['vraceno', 'Vráceno'], ['odmitnuto', 'Storno / odmítnuto'], ['historie', 'Historie']].map(([k, l]) => `<button data-seg="${k}" aria-pressed="${S.archive === k}">${l}</button>`).join('');
   if (S.archive === 'historie') return `<h2>Archiv</h2><div class="seg" style="margin-bottom:12px">${seg}</div>` + viewHistorie();
   const list = S.res.filter((r) => ['returned', 'rejected', 'cancelled'].includes(r.status)).filter(f[S.archive]).reverse();
   const year = new Date().getFullYear();
@@ -606,7 +622,7 @@ function viewArchiv() {
   return `<h2>Archiv</h2><p class="muted" style="margin:-6px 0 12px">Nájem za rok ${year}: <b style="color:var(--ink)">${kc(sum)}</b></p><div class="seg">${seg}</div>` +
     (list.length ? list.map(card).join('') : `<div class="empty">Zatím prázdné.</div>`);
 }
-const OV_ST = [['aktivni', 'Aktivní'], ['vse', 'Vše'], ['pending', 'Čeká'], ['confirmed', 'Potvrzeno'], ['returned', 'Vráceno'], ['zruseno', 'Zrušeno']];
+const OV_ST = [['aktivni', 'Aktivní'], ['vse', 'Vše'], ['pending', 'Čeká'], ['confirmed', 'Potvrzeno'], ['returned', 'Vráceno'], ['zruseno', 'Storno / odmítnuto']];
 function viewPrehled() {
   const o = S.ov;
   const stOk = { aktivni: (r) => ['pending', 'confirmed'].includes(r.status), vse: () => true, pending: (r) => r.status === 'pending', confirmed: (r) => r.status === 'confirmed', returned: (r) => r.status === 'returned', zruseno: (r) => ['rejected', 'cancelled'].includes(r.status) }[o.st];
@@ -614,7 +630,7 @@ function viewPrehled() {
   let rows = S.res.filter(stOk).filter((r) => o.item === 'vse' || r.item_id === o.item)
     .filter((r) => !q || [r.customer_name, r.phone, r.email, r.address, r.code, r.note, r.admin_note].some((v) => String(v || '').toLowerCase().includes(q)));
   rows = rows.sort((a, b) => (o.st === 'aktivni' || o.st === 'pending' || o.st === 'confirmed' ? a.start_date.localeCompare(b.start_date) : b.start_date.localeCompare(a.start_date)));
-  const STL = { pending: 'Čeká', confirmed: 'Potvrzeno', returned: 'Vráceno', rejected: 'Odmítnuto', cancelled: 'Zrušeno' };
+  const STL = { pending: 'Čeká', confirmed: 'Potvrzeno', returned: 'Vráceno', rejected: 'Odmítnuto', cancelled: 'Storno' };
   const stChips = OV_ST.map(([k, l]) => `<button data-ovst="${k}" aria-pressed="${o.st === k}">${l}</button>`).join('');
   const itChips = [['vse', 'Vše']].concat(S.items.filter((i) => i.active).map((i) => [i.id, i.short_name || i.name])).map(([k, l]) => `<button data-ovit="${k}" aria-pressed="${o.item === k}">${esc(l)}</button>`).join('');
   const live = rows.filter((r) => !['rejected', 'cancelled'].includes(r.status));
