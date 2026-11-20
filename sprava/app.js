@@ -7,7 +7,7 @@ const sb = createClient(SB_URL, SB_KEY, { auth: { persistSession: true, storageK
 
 const FIRM = { name: 'Půjčovna Žďár', owner: 'Lubomír Šotek', ico: '71391134', addr: 'Světnov 201, 591 02 Žďár nad Sázavou', phone: '+420 777 097 902', email: 'info@pujcovna-zdar.cz' };
 const app = document.getElementById('app');
-const S = { tab: 'poptavky', items: [], res: [], closures: [], calY: 0, calM: 0, archive: 'vse', hYear: 0, hQ: '', hist: [], eet: {}, stats: null, statDays: 30, ov: { st: 'aktivni', item: 'vse', q: '' }, push: 'unknown', user: null, settings: {} };
+const S = { tab: 'poptavky', items: [], res: [], closures: [], calY: 0, calM: 0, archive: 'vse', hYear: 0, hQ: '', hist: [], eet: {}, stats: null, statDays: 30, statMetric: 'visits', ov: { st: 'aktivni', item: 'vse', q: '' }, push: 'unknown', user: null, settings: {} };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const kc = (n) => String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' Kč';
@@ -663,15 +663,27 @@ function viewNavstevy() {
   if (!st) { loadStats(); return `<h2>Návštěvnost</h2><div class="seg">${chips}</div><div class="empty">Načítám…</div>`; }
   const delta = (a, b) => (b > 0 ? `<span class="muted" style="font-size:13px">${a >= b ? '▲' : '▼'} ${Math.abs(Math.round(((a - b) / b) * 100))} % proti předchozím ${S.statDays} dnům</span>` : '<span class="muted" style="font-size:13px">&nbsp;</span>');
   const tile = (l, v, d) => `<div class="card" style="flex:1;min-width:150px;padding:14px 16px;gap:2px"><span class="muted">${l}</span><b style="font-family:var(--head);font-size:32px">${v}</b>${d}</div>`;
-  const max = Math.max(1, ...st.daily.map((x) => x.views));
-  const bars = st.daily.map((x) => `<div title="${dmy(x.d)}: ${x.visits} návštěv, ${x.views} zobrazení" style="flex:1;min-width:2px;height:${Math.max(2, Math.round((x.views / max) * 100))}%;background:${x.d === todayIso() ? 'var(--accent)' : 'var(--green)'};border-radius:3px 3px 0 0"></div>`).join('');
+  const M = S.statMetric === 'views' ? 'views' : 'visits';
+  const max = Math.max(1, ...st.daily.map((x) => x[M]));
+  const dayLine = (x) => `<b>${WD[pd(x.d).getDay()]} ${dmy(x.d)}</b>: ${x.visits} ${x.visits === 1 ? 'návštěva' : x.visits >= 2 && x.visits <= 4 ? 'návštěvy' : 'návštěv'} · ${x.views} zobrazení stránek`;
+  const cols = st.daily.map((x) => { const dow = pd(x.d).getDay(), we = dow === 0 || dow === 6, td = x.d === todayIso();
+    return `<div class="dcol" data-day="${x.d}" data-line="${esc(dayLine(x))}" style="flex:0 0 30px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;${we ? 'background:var(--gsoft);border-radius:8px;' : ''}">
+      <div style="height:100px;width:100%;display:flex;align-items:flex-end;justify-content:center"><div style="width:18px;height:${x[M] ? Math.max(4, Math.round((x[M] / max) * 100)) : 2}%;background:${td ? 'var(--accent)' : x[M] ? 'var(--green)' : 'var(--line)'};border-radius:5px 5px 0 0"></div></div>
+      <b style="font-size:12px;${x[M] ? '' : 'color:var(--muted);font-weight:500'}">${x[M]}</b>
+      <span style="font-size:11px;line-height:1.1;color:${td ? 'var(--accent)' : 'var(--muted)'};font-weight:${td ? 800 : 500}">${pd(x.d).getDate()}.${pd(x.d).getMonth() + 1}.</span>
+      <span style="font-size:10px;color:var(--muted)">${WD[dow]}</span></div>`; }).join('');
+  const tot = st.daily.length, avg = (st[M] / tot).toFixed(1).replace('.', ',');
+  const best = st.daily.reduce((m, x) => (x[M] > m[M] ? x : m), st.daily[0]);
   const pageName = (pth) => { const k = pth === '/' ? '/' : pth.replace(/\.html$/, '').replace(/\/$/, ''); return PAGE_NAMES[k] || pth; };
   const list = (rows, name, key, unit) => rows.length ? rows.map((x) => `<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid var(--line)"><span>${esc(name(x))}</span><b>${x[key]}${unit || ''}</b></div>`).join('') : '<div class="muted">Zatím nic.</div>';
   const today = st.daily[st.daily.length - 1] || { views: 0, visits: 0 };
   return `<h2>Návštěvnost</h2><div class="seg">${chips}</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">${tile('Návštěvy', st.visits, delta(st.visits, st.prev_visits))}${tile('Zobrazení stránek', st.views, delta(st.views, st.prev_views))}</div>
-    <div class="card"><b>Zobrazení po dnech</b><div style="display:flex;align-items:flex-end;gap:2px;height:110px">${bars}</div>
-      <div class="muted" style="display:flex;justify-content:space-between;font-size:12px"><span>${dm(st.daily[0].d)}</span><span>dnes: ${today.visits} návštěv</span></div></div>
+    <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b>Po dnech</b><div class="seg" style="margin:0"><button data-sm="visits" aria-pressed="${M === 'visits'}">Návštěvy</button><button data-sm="views" aria-pressed="${M === 'views'}">Zobrazení</button></div></div>
+      <div id="dline" style="background:var(--gsoft);border-radius:12px;padding:8px 12px;font-size:14px;min-height:20px">${dayLine(today)}</div>
+      <div class="dchart" style="display:flex;gap:2px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch">${cols}</div>
+      <div class="muted" style="font-size:12px">Najeďte myší nebo klepněte na sloupec a nahoře se zobrazí podrobnosti dne. Zelené pozadí = víkend. Posouvejte do stran pro starší dny.</div>
+      <div class="muted" style="font-size:13px">Průměr: <b style="color:var(--ink)">${avg}</b> ${M === 'visits' ? 'návštěv' : 'zobrazení'} denně · nejlepší den: <b style="color:var(--ink)">${dm(best.d)} (${best[M]})</b></div></div>
     <details class="card" open><summary style="cursor:pointer;font-weight:700">Zájem o položky</summary>
       <div class="muted" style="font-size:12px;display:grid;grid-template-columns:1fr repeat(4,48px);gap:4px;padding:6px 0;text-align:right"><span style="text-align:left">Položka</span><span>Zobr.</span><span>Výběr</span><span>Termín</span><span>Poptávky</span></div>
       ${(st.items || []).map((x) => `<div style="display:grid;grid-template-columns:1fr repeat(4,48px);gap:4px;padding:6px 0;border-top:1px solid var(--line);text-align:right"><span style="text-align:left">${esc(itemName(x.id))}${x.contacts ? ` <span class="muted" style="font-size:12px">· ${x.contacts}× kontakt</span>` : ''}</span><b>${x.views}</b><b>${x.picks}</b><b>${x.dates}</b><b>${x.requests}</b></div>`).join('') || '<div class="muted">Zatím nic.</div>'}
@@ -818,6 +830,7 @@ function render() {
     <nav class="tabs">${tabs}</nav>`;
   document.title = (pending ? `(${pending}) ` : '') + 'Správa – Půjčovna Žďár';
   document.body.classList.toggle('cal', S.tab === 'kalendar');
+  const ch = document.querySelector('.dchart'); if (ch) ch.scrollLeft = ch.scrollWidth;
 }
 app.addEventListener('input', (e) => {
   if (e.target.id !== 'hq' && e.target.id !== 'ovq') return;
@@ -825,8 +838,15 @@ app.addEventListener('input', (e) => {
   const pos = e.target.selectionStart; render();
   const el = document.getElementById(id); if (el) { el.focus(); el.setSelectionRange(pos, pos); }
 });
+function pickDay(e) {
+  const c = e.target.closest && e.target.closest('.dcol'); if (!c) return;
+  const l = document.getElementById('dline'); if (l) l.innerHTML = c.dataset.line;
+}
+app.addEventListener('mouseover', pickDay);
+app.addEventListener('click', pickDay);
 app.addEventListener('click', async (e) => {
   const b = e.target.closest('button,[data-open]'); if (!b) return;
+  if (b.dataset.sm) { S.statMetric = b.dataset.sm; render(); return; }
   if (b.dataset.sd) { S.statDays = +b.dataset.sd; S.stats = null; render(); return; }
   if (b.dataset.tab) { S.tab = b.dataset.tab; if (S.tab === 'navstevy') S.stats = null; render(); scrollTo(0, 0); return; }
   if (b.dataset.seg) { S.archive = b.dataset.seg; render(); return; }
