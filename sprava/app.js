@@ -668,6 +668,7 @@ function viewPrehled() {
 async function loadStats() {
   const { data, error } = await sb.rpc('pj_stats', { p_days: S.statDays });
   if (error) { toast('Statistiky se nenačetly: ' + error.message); return; }
+  (data.daily || []).forEach((x) => { x.d = String(x.d).slice(0, 10); });
   S.stats = data; if (S.tab === 'navstevy') render();
 }
 const PAGE_NAMES = { '/': 'Úvod', '/skakaci-hrad': 'Skákací hrad', '/cistic-kobercu': 'Čistič koberců', '/nosic-kol': 'Nosič kol', '/stresni-box': 'Střešní box', '/pricniky': 'Příčníky', '/odvlhcovac': 'Odvlhčovač', '/podminky': 'Podmínky zapůjčení', '/gdpr': 'GDPR', '/404': 'Nenalezeno' };
