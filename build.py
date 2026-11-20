@@ -136,6 +136,7 @@ def head(title, desc, path="/", image="/img/hrad-1.jpg", ld=None):
 <title>{e(title)}</title>
 <meta name="description" content="{e(desc)}">
 <meta name="robots" content="index,follow,max-image-preview:large">
+<meta name="google-site-verification" content="9hPKgIYhCg_evJDCSA3Z0mEANu-zkcHJdCR1flKu0mo">
 <link rel="canonical" href="{BASE}{path}">
 <meta property="og:type" content="website">
 <meta property="og:locale" content="cs_CZ">
