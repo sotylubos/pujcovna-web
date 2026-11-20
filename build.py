@@ -10,6 +10,13 @@ PHONE_LINK = "+420777097902"
 EMAIL = "info@pujcovna-zdar.cz"
 BASE = "https://pujcovna-zdar.cz"
 TODAY = "2026-11-14"
+HOME_FAQ = [
+    ("Co si můžu v půjčovně ve Žďáru nad Sázavou půjčit?", "Půjčujeme skákací hrad s klouzačkou, čistič koberců a čalounění Kärcher, nosič kol na tažné zařízení, střešní box, střešní příčníky a odvlhčovač."),
+    ("Jak si zboží zarezervuji?", "Na webu vyberete, co si chcete půjčit, označíte v kalendáři první a poslední den a odešlete poptávku. Rezervace platí po našem potvrzení telefonem nebo e-mailem."),
+    ("Platí se předem nájem?", "Předem se skládá jen vratná kauce, nájem se zaplatí až při vrácení a můžeme ho strhnout z kauce. Platit můžete hotově, QR kódem nebo převodem."),
+    ("Kde a kdy si půjčené věci vyzvednu?", "Vyzvedávat můžete ve Světnově u Žďáru nad Sázavou, večer i o víkendu po domluvě."),
+    ("Dovezete skákací hrad až k nám domů?", "Ano, hrad na přání přivezeme, postavíme i složíme. Doprava stojí 6 Kč za kilometr, počítá se dovoz i odvoz. Půjčujeme na Žďársku a na Vysočině, například v okolí Bohdalova, Herálce, Škrdlovic, Počítek, Obyčtova, Najdku a v Jihlavě."),
+]
 AREAS = "Bohdalov, Herálec, Škrdlovice, Počítky, Obyčtov, Najdek a Jihlava"
 
 # SEO: tvar názvu ve 2. pádu pro titulky + obsah detailních stránek
@@ -218,12 +225,13 @@ def index():
     hrad = ITEMS[0]
     body = head("Půjčovna Žďár nad Sázavou – skákací hrad, čistič koberců, střešní box",
                 "Půjčovna ve Světnově u Žďáru nad Sázavou: skákací hrad s klouzačkou, čistič koberců Kärcher, nosič kol, střešní box, příčníky a odvlhčovač. Online rezervace, vyzvednutí večer i o víkendu, dovoz hradu domů.",
-                "/", ld=[BUSINESS, {"@context": "https://schema.org", "@type": "WebSite", "url": BASE + "/", "name": "Půjčovna Žďár", "inLanguage": "cs"}]) + f"""
+                "/", ld=[BUSINESS, {"@context": "https://schema.org", "@type": "WebSite", "url": BASE + "/", "name": "Půjčovna Žďár", "inLanguage": "cs"},
+                {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": a_}} for q, a_ in HOME_FAQ]}]) + f"""
 <main id="top">
 <section class="wrap hero">
 <div class="hero-text">
 <span class="pill">Světnov u Žďáru nad Sázavou</span>
-<h1>Půjčte si, co zrovna potřebujete. Večer i o víkendu.</h1>
+<h1>Půjčovna ve Žďáru nad Sázavou: půjčte si, co zrovna potřebujete.</h1>
 <p class="lead">Skákací hrad na oslavu, čistič na koberce, střešní box na dovolenou. Zarezervujete online, vyzvednete si u nás, nebo vám to přivezeme až domů.</p>
 <div class="hero-actions"><a class="btn btn-accent" href="#rezervace">Vybrat termín</a><a class="btn btn-outline" href="tel:{PHONE_LINK}">{PHONE_SVG} 777 097 902</a></div>
 </div>
@@ -325,8 +333,9 @@ def index():
 <section class="white"><div class="wrap sec"><div class="prose">
 <h2>Půjčovna ve Žďáru nad Sázavou</h2>
 <p>Půjčovna ve Světnově u Žďáru nad Sázavou nabízí věci, které se hodí jen pár dní v roce: <a href="/skakaci-hrad.html">skákací hrad s klouzačkou</a> na oslavy, profesionální <a href="/cistic-kobercu.html">čistič koberců a čalounění Kärcher</a>, <a href="/nosic-kol.html">nosič kol</a> na tažné zařízení, <a href="/stresni-box.html">střešní box</a> s <a href="/pricniky.html">příčníky</a> na dovolenou a <a href="/odvlhcovac.html">odvlhčovač</a> na sklepy a vysoušení po vytopení.</p>
-<p>Půjčujeme zákazníkům ze Žďáru nad Sázavou i okolí (například {AREAS}). Zarezervujete online, předání je večer i o víkendu a skákací hrad vám na přání přivezeme a postavíme.</p>
-</div></div></section>
+<p>Půjčujeme zákazníkům ze Žďáru nad Sázavou a okolí, na Žďársku i na Vysočině (například {AREAS}). Zarezervujete online, předání je večer i o víkendu a skákací hrad vám na přání přivezeme a postavíme.</p>
+</div>
+<div class="prose faq" style="margin-top:28px"><h2>Časté otázky</h2>{"".join(f"<details><summary>{e(q)}</summary><p>{e(a_)}</p></details>" for q, a_ in HOME_FAQ)}</div></div></section>
 </main>
 {FOOT}
 {config_script()}

@@ -672,6 +672,10 @@ function viewNavstevy() {
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">${tile('Návštěvy', st.visits, delta(st.visits, st.prev_visits))}${tile('Zobrazení stránek', st.views, delta(st.views, st.prev_views))}</div>
     <div class="card"><b>Zobrazení po dnech</b><div style="display:flex;align-items:flex-end;gap:2px;height:110px">${bars}</div>
       <div class="muted" style="display:flex;justify-content:space-between;font-size:12px"><span>${dm(st.daily[0].d)}</span><span>dnes: ${today.visits} návštěv</span></div></div>
+    <details class="card" open><summary style="cursor:pointer;font-weight:700">Zájem o položky</summary>
+      <div class="muted" style="font-size:12px;display:grid;grid-template-columns:1fr repeat(4,48px);gap:4px;padding:6px 0;text-align:right"><span style="text-align:left">Položka</span><span>Zobr.</span><span>Výběr</span><span>Termín</span><span>Poptávky</span></div>
+      ${(st.items || []).map((x) => `<div style="display:grid;grid-template-columns:1fr repeat(4,48px);gap:4px;padding:6px 0;border-top:1px solid var(--line);text-align:right"><span style="text-align:left">${esc(itemName(x.id))}${x.contacts ? ` <span class="muted" style="font-size:12px">· ${x.contacts}× kontakt</span>` : ''}</span><b>${x.views}</b><b>${x.picks}</b><b>${x.dates}</b><b>${x.requests}</b></div>`).join('') || '<div class="muted">Zatím nic.</div>'}
+      <p class="muted" style="font-size:12px;margin:6px 0 0"><b>Zobr.</b> = zobrazení stránky položky · <b>Výběr</b> = kolik návštěvníků si položku vybralo v rezervaci · <b>Termín</b> = kolik z nich zvolilo datum v kalendáři · <b>Poptávky</b> = odeslané poptávky · <b>kontakt</b> = klepnutí na telefon nebo e-mail. Údaje o výběru se sbírají od 20. 11. 2026.</p></details>
     <div class="card"><b>Nejnavštěvovanější stránky</b>${list(st.pages, (x) => pageName(x.path), 'views', '×')}</div>
     <div class="card"><b>Odkud lidé přišli</b>${list(st.refs, (x) => x.ref || 'Přímo / nezjištěno', 'visits', '')}</div>
     <div class="card"><b>Zařízení</b>${list(st.devices, (x) => DEVS[x.device] || x.device, 'visits', '')}</div>

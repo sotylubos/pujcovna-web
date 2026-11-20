@@ -1,4 +1,4 @@
-/* Anonymní počítání návštěv: žádné cookies, žádná IP adresa, žádné údaje o osobě.
+/* Anonymní počítání návštěv a zájmu o položky: žádné cookies, žádná IP adresa, žádné údaje o osobě.
    Posílá se jen cesta stránky, odkud návštěvník přišel (doména), typ zařízení a náhodné číslo platné jen po dobu otevřeného okna. */
 (function () {
   'use strict';
@@ -13,9 +13,25 @@
     var w = Math.min(screen.width || 1024, window.innerWidth || 1024);
     var dev = w < 700 ? 'mobile' : w < 1100 ? 'tablet' : 'desktop';
     var path = location.pathname.replace(/\/index\.html$/, '/');
-    fetch('https://bnckyiveqebzzzxuoluj.supabase.co/rest/v1/rpc/pj_track', {
+    var KEY = 'sb_publishable_9-08pVFy82_mNy3rRVh-6w_gUZwOe3I', BASE = 'https://bnckyiveqebzzzxuoluj.supabase.co/rest/v1/rpc/';
+    var PAGE_ITEM = { '/skakaci-hrad': 'hrad', '/cistic-kobercu': 'cistic', '/nosic-kol': 'nosic', '/stresni-box': 'box', '/pricniky': 'pricniky', '/odvlhcovac': 'odvlhcovac' };
+    var pageItem = PAGE_ITEM[path.replace(/\.html$/, '')] || null;
+    /* Zájem o položky: window.pjEvent('pick'|'date', id) – kolikrát si někdo vybral položku nebo termín v kalendáři */
+    var sent = {};
+    window.pjEvent = function (ev, item) {
+      try {
+        var k = ev + '|' + (item || ''); if (sent[k]) return; sent[k] = 1; // každou událost jednou za otevřené okno
+        fetch(BASE + 'pj_event', { method: 'POST', keepalive: true, headers: { apikey: KEY, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ p_ev: ev, p_item: item || null, p_sid: sid }) }).catch(function () {});
+      } catch (e) {}
+    };
+    document.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('a[href^="tel:"],a[href^="mailto:"]'); if (!a) return;
+      window.pjEvent(a.getAttribute('href').indexOf('tel:') === 0 ? 'call' : 'mail', pageItem);
+    });
+    fetch(BASE + 'pj_track', {
       method: 'POST', keepalive: true,
-      headers: { apikey: 'sb_publishable_9-08pVFy82_mNy3rRVh-6w_gUZwOe3I', 'Content-Type': 'application/json' },
+      headers: { apikey: KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({ p_path: path, p_ref: ref, p_sid: sid, p_dev: dev })
     }).catch(function () {});
   } catch (e) {}

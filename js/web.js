@@ -79,8 +79,9 @@
     $$('.chip').forEach(function (c) { c.setAttribute('aria-pressed', c.dataset.item === id ? 'true' : 'false'); });
     loadBusy();
   }
-  $$('.chip').forEach(function (c) { c.addEventListener('click', function () { pick(c.dataset.item); }); });
-  $$('[data-pick]').forEach(function (a) { a.addEventListener('click', function () { pick(a.dataset.pick); }); });
+  var track = function (ev, id) { if (window.pjEvent) window.pjEvent(ev, id); };
+  $$('.chip').forEach(function (c) { c.addEventListener('click', function () { track('pick', c.dataset.item); pick(c.dataset.item); }); });
+  $$('[data-pick]').forEach(function (a) { a.addEventListener('click', function () { track('pick', a.dataset.pick); pick(a.dataset.pick); }); });
 
   function loadBusy() {
     if (!st.item) { render(); return; }
@@ -104,6 +105,7 @@
     else if (s < st.start) { st.start = s; }
     else if (rangeHasBusy(st.start, s)) { showErr(calErr, 'V tomto rozmezí je už obsazený den. Zkuste jiný termín.'); return; }
     else { st.end = s; }
+    track('date', st.item);
     render();
   }
 
