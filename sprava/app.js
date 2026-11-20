@@ -477,6 +477,20 @@ const ACT = {
       };
     });
   },
+  purge: (r) => {
+    if (r.paid_status !== 'unpaid' || r.deposit_status === 'received') { toast('Rezervace má platbu nebo kauci. Nejdřív ji stornujte, smazat jde jen poptávka bez peněz.'); return; }
+    sheet(`<h3>Smazat poptávku úplně?</h3>
+      <p style="margin:0"><b>${esc(r.customer_name)}</b>, ${esc(itemName(r.item_id))}, ${esc(range(r))}</p>
+      <p class="muted" style="margin:0;font-size:13px">Poptávka zmizí z aplikace i z kalendáře a nepůjde vrátit zpět. Pokud ji jen nechcete řešit, stačí Odmítnout nebo Storno, zůstane pak v Archivu.</p>
+      <div class="actions"><button class="btn danger" id="pok">Smazat úplně</button><button class="btn ghost" data-close>Zpět</button></div>`,
+    (el) => {
+      el.querySelector('#pok').onclick = async () => {
+        const { error } = await sb.from('pj_reservations').delete().eq('id', r.id);
+        if (error) { toast('Smazání se nepovedlo: ' + error.message); return; }
+        S.res = S.res.filter((x) => x.id !== r.id); closeSheet(); render(); toast('Poptávka smazána');
+      };
+    });
+  },
   mail: (r) => mailSheet(r, r.status === 'pending' ? 'confirm' : r.deposit_status === 'received' ? 'depositIn' : 'confirm', 'Napsat zákazníkovi'),
   edit: (r) => {
     const opts = S.items.map((i) => `<option value="${i.id}"${i.id === r.item_id ? ' selected' : ''}>${esc(i.name)}</option>`).join('');
@@ -550,12 +564,13 @@ function card(r) {
     else tags.push(`<span class="tag ok">EET ✓ ${kc(sum)}</span>`);
   }
   let acts = '';
-  if (r.status === 'pending') acts = `<button class="btn primary" data-a="confirm">Potvrdit</button><button class="btn danger" data-a="reject">Odmítnout</button><button class="btn ghost" data-a="cancel">Storno</button>`;
+  if (r.status === 'pending') acts = `<button class="btn primary" data-a="confirm">Potvrdit</button><button class="btn danger" data-a="reject">Odmítnout</button><button class="btn ghost" data-a="cancel">Storno</button><button class="btn ghost" data-a="purge">Smazat úplně</button>`;
   else if (r.status === 'confirmed') acts =
     `${r.paid_status === 'unpaid' ? '<button class="btn accent" data-a="paid">Zaplaceno</button>' : '<button class="btn ghost" data-a="paid">Platba</button>'}` +
     `${r.deposit_status === 'none' ? '<button class="btn primary" data-a="depIn">Kauce převzata</button>' : '<button class="btn ghost" data-a="depFix">Kauce</button>'}` +
     `<button class="btn ghost" data-a="qr">QR platba</button>` +
     `<button class="btn ghost" data-a="back">Vráceno</button><button class="btn ghost" data-a="cancel">Storno</button>`;
+  else if (r.status === 'rejected' || r.status === 'cancelled') acts = `<button class="btn ghost" data-a="purge">Smazat úplně</button>`;
   else if (r.status === 'returned') acts = `<button class="btn ghost" data-a="paid">Platba</button><button class="btn ghost" data-a="depFix">Kauce</button><button class="btn accent" data-a="unreturn">Vrátit zpět do půjčeno</button>`;
   const contact = [r.phone && `<a href="tel:${esc(r.phone.replace(/\s/g, ''))}">${esc(r.phone)}</a>`, r.email && `<a href="mailto:${esc(r.email)}">${esc(r.email)}</a>`].filter(Boolean).join('');
   return `<article class="card" data-id="${r.id}">
