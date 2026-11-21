@@ -373,7 +373,19 @@ def detail(it):
                "image": [f'{BASE}/img/{im}' for im in imgs], "url": url,
                "offers": {"@type": "Offer", "url": url, "priceCurrency": "CZK", "price": it["price"], "availability": "https://schema.org/InStock",
                           "priceSpecification": {"@type": "UnitPriceSpecification", "price": it["price"], "priceCurrency": "CZK", "unitText": "DAY"},
-                          "seller": {"@id": BASE + "/#firma"}}}
+                          "seller": {"@id": BASE + "/#firma"},
+                          "hasMerchantReturnPolicy": {"@type": "MerchantReturnPolicy", "applicableCountry": "CZ",
+                                                      "returnPolicyCategory": "https://schema.org/MerchantReturnNotPermitted"}}}
+    BRANDS = {"cistic": "Kärcher", "box": "Neumann", "odvlhcovac": "Master"}
+    if it["id"] in BRANDS:
+        product["brand"] = {"@type": "Brand", "name": BRANDS[it["id"]]}
+    if it["id"] != "hrad":
+        product["offers"]["shippingDetails"] = {"@type": "OfferShippingDetails",
+            "shippingRate": {"@type": "MonetaryAmount", "value": 0, "currency": "CZK"},
+            "shippingDestination": {"@type": "DefinedRegion", "addressCountry": "CZ"},
+            "deliveryTime": {"@type": "ShippingDeliveryTime",
+                             "handlingTime": {"@type": "QuantitativeValue", "minValue": 0, "maxValue": 1, "unitCode": "DAY"},
+                             "transitTime": {"@type": "QuantitativeValue", "minValue": 0, "maxValue": 0, "unitCode": "DAY"}}}
     crumbs_ld = {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [
         {"@type": "ListItem", "position": 1, "name": "Půjčovna Žďár", "item": BASE + "/"},
         {"@type": "ListItem", "position": 2, "name": it["name"], "item": url}]}
