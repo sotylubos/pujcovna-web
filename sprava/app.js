@@ -25,7 +25,14 @@ const livePhone = (el) => el.addEventListener('input', () => {
   if (d.startsWith('00420')) d = d.slice(5); else if (d.length > 9 && d.startsWith('420')) d = d.slice(3);
   if (d.length <= 9) el.value = d.replace(/(\d{3})(?=\d)/g, '$1 ').trim();
 });
+const POWDER = 35;
+const pcOf = (r) => (r.item_id === 'cistic' && r.powder_count > 0 ? r.powder_count : 0);
 const powderLine = (r) => r.item_id === 'cistic' ? `Počet prášků: ${r.powder_count != null ? r.powder_count : '[doplňte]'}\n` : '';
+const rentBlock = (r) => {
+  const pc = pcOf(r);
+  if (!pc) return `${powderLine(r)}Nájem: ${kc(r.rent_amount)}\n`;
+  return `Nájem: ${kc(r.rent_amount - pc * POWDER)}\nPočet prášků: ${pc} × ${POWDER} Kč = ${kc(pc * POWDER)}\nCelkem za půjčení: ${kc(r.rent_amount)} (účtujeme při vrácení)\n`;
+};
 const dmy = (s) => { const d = pd(s); return `${d.getDate()}. ${d.getMonth() + 1}. ${d.getFullYear()}`; };
 const WD = ['ne', 'po', 'út', 'st', 'čt', 'pá', 'so'];
 const wd = (s) => WD[pd(s).getDay()];
@@ -165,7 +172,7 @@ const sign = `\n\nS pozdravem\n${FIRM.owner}\n${FIRM.name}\n${FIRM.phone}\n${FIR
 const T = {
   confirm: (r) => ({
     subject: `Potvrzení rezervace ${r.code} – ${itemName(r.item_id)}`,
-    body: `Dobrý den,\n\npotvrzujeme Vaši rezervaci.\n\n${itemName(r.item_id)}\nTermín: ${dmy(r.start_date)}${r.end_date !== r.start_date ? ' – ' + dmy(r.end_date) : ''} (${daysWord(nDays(r))})\n${powderLine(r)}Nájem: ${kc(r.rent_amount)}\nVratná kauce: ${kc(r.deposit_amount)} (platí se při převzetí, vrátíme ji při vrácení)\n\n${r.delivery ? 'Doprava: domluvíme telefonicky.' : 'Místo převzetí: ' + FIRM.addr}\nČas předání: [doplňte]\n\nS sebou si prosím vezměte doklad totožnosti. Zaplatit můžete hotově nebo QR kódem při převzetí.` + sign,
+    body: `Dobrý den,\n\npotvrzujeme Vaši rezervaci.\n\n${itemName(r.item_id)}\nTermín: ${dmy(r.start_date)}${r.end_date !== r.start_date ? ' – ' + dmy(r.end_date) : ''} (${daysWord(nDays(r))})\n${rentBlock(r)}Vratná kauce: ${kc(r.deposit_amount)} (platí se při převzetí, vrátíme ji při vrácení)\n\n${r.delivery ? 'Doprava: domluvíme telefonicky.' : 'Místo převzetí: ' + FIRM.addr}\nČas předání: [doplňte]\n\nS sebou si prosím vezměte doklad totožnosti. Zaplatit můžete hotově nebo QR kódem při převzetí.` + sign,
   }),
   reject: (r) => ({
     subject: `Rezervace ${r.code} – ${itemName(r.item_id)}`,
@@ -173,7 +180,7 @@ const T = {
   }),
   depositIn: (r) => ({
     subject: `Potvrzení o převzetí kauce – rezervace ${r.code}`,
-    body: `Dobrý den,\n\npotvrzujeme, že jsme dne ${nowCz()} od Vás převzali vratnou kauci ve výši ${kc(r.deposit_amount)}.\n\nZapůjčeno: ${itemName(r.item_id)}\nNájemce: ${r.customer_name}${r.address ? ', ' + r.address : ''}\nTermín: ${dmy(r.start_date)}${r.end_date !== r.start_date ? ' – ' + dmy(r.end_date) : ''}\nČíslo rezervace: ${r.code}\n${powderLine(r)}\nKauci Vám vrátíme při vrácení zapůjčené věci v pořádku.` + sign + `\nIČ ${FIRM.ico}, ${FIRM.addr}`,
+    body: `Dobrý den,\n\npotvrzujeme, že jsme dne ${nowCz()} od Vás převzali vratnou kauci ve výši ${kc(r.deposit_amount)}.\n\nZapůjčeno: ${itemName(r.item_id)}\nNájemce: ${r.customer_name}${r.address ? ', ' + r.address : ''}\nTermín: ${dmy(r.start_date)}${r.end_date !== r.start_date ? ' – ' + dmy(r.end_date) : ''}\nČíslo rezervace: ${r.code}\n${pcOf(r) ? `Počet prášků: ${pcOf(r)} (${kc(pcOf(r) * POWDER)}, účtujeme při vrácení)\n` : powderLine(r)}\nKauci Vám vrátíme při vrácení zapůjčené věci v pořádku.` + sign + `\nIČ ${FIRM.ico}, ${FIRM.addr}`,
   }),
   depositOut: (r) => {
     const rent = r.paid_status === 'deposit' ? r.rent_amount : 0, ret = r.deposit_retained || 0, back = r.deposit_amount - rent - ret;
@@ -181,7 +188,7 @@ const T = {
     if (!rent && !ret) t = `Potvrzujeme, že jsme Vám dne ${nowCz()} vrátili celou kauci ${kc(r.deposit_amount)}.`;
     else {
       t = `Vyúčtování kauce ${kc(r.deposit_amount)}:\n`;
-      if (rent) t += `– nájem ${itemName(r.item_id)} (${daysWord(nDays(r))}): ${kc(rent)}\n`;
+      if (rent) t += pcOf(r) ? `– nájem ${itemName(r.item_id)} (${daysWord(nDays(r))}): ${kc(rent - pcOf(r) * POWDER)}\n– prášky ${pcOf(r)} × ${POWDER} Kč: ${kc(pcOf(r) * POWDER)}\n` : `– nájem ${itemName(r.item_id)} (${daysWord(nDays(r))}): ${kc(rent)}\n`;
       if (ret) t += `– ponecháno z důvodu: ${r.deposit_retained_reason || '[doplňte]'}: ${kc(ret)}\n`;
       t += `\nDne ${nowCz()} jsme Vám vrátili ${kc(back)}.`;
     }
@@ -190,7 +197,7 @@ const T = {
 };
 function mailSheet(r, kind, title) {
   if (!r.email) { toast('Zákazník nemá e-mail'); return; }
-  const t = T[kind](r);
+  const t = T[kind](r); let gen = t.body;
   sheet(`<h3>${esc(title)}</h3>
     <p class="muted" style="margin:0">Pro: ${esc(r.email)}</p>
     ${r.item_id === 'cistic' && kind !== 'reject' && kind !== 'depositOut' ? `<label class="f">Počet prášků<input id="mp" type="number" inputmode="numeric" min="0" value="${r.powder_count != null ? r.powder_count : ''}" placeholder="doplňte číslo"></label>` : ''}
@@ -201,9 +208,12 @@ function mailSheet(r, kind, title) {
     const mp = el.querySelector('#mp');
     if (mp) mp.addEventListener('change', async () => {
       const n = mp.value === '' ? null : Math.max(0, Math.round(+mp.value));
-      const mb = el.querySelector('#mb');
-      mb.value = mb.value.replace(/^Počet prášků:.*$/m, `Počet prášků: ${n != null ? n : '[doplňte]'}`);
-      await patch(r, { powder_count: n });
+      const mb = el.querySelector('#mb'), wasGen = mb.value === gen;
+      const upd = await patch(r, { powder_count: n, rent_amount: r.rent_amount + ((n || 0) - (r.powder_count || 0)) * POWDER });
+      if (!upd) return;
+      const nt = T[kind](r);
+      if (wasGen) mb.value = nt.body; else mb.value = mb.value.replace(/^Počet prášků:.*$/m, `Počet prášků: ${n != null ? n : '[doplňte]'}`);
+      gen = nt.body;
     });
     el.querySelector('#send').onclick = () => {
       location.href = `mailto:${encodeURIComponent(r.email)}?subject=${encodeURIComponent(el.querySelector('#ms').value)}&body=${encodeURIComponent(el.querySelector('#mb').value)}`;
@@ -533,12 +543,14 @@ const ACT = {
       livePhone(g('#ep'));
       const powderToggle = () => { g('#epw').hidden = g('#ei').value !== 'cistic'; };
       g('#ei').addEventListener('change', powderToggle);
+      g('#epc').addEventListener('input', () => check(true));
       ['#er', '#ek'].forEach((q) => g(q).addEventListener('input', () => { manual = true; }));
       const check = (recalc) => {
         const it = S.items.find((i) => i.id === g('#ei').value), f = g('#ef').value, to = g('#et').value;
         if (!f || !to || to < f) { g('#esum').textContent = 'Zkontrolujte termín.'; return null; }
         const n = Math.round((pd(to) - pd(f)) / 86400000) + 1;
-        if (recalc && !manual) { g('#er').value = n * it.price; g('#ek').value = it.deposit; }
+        const pcv = it.id === 'cistic' ? Math.max(0, Math.round(+g('#epc').value || 0)) : 0;
+        if (recalc && !manual) { g('#er').value = n * it.price + pcv * POWDER; g('#ek').value = it.deposit; }
         const clash = S.res.find((x) => x.id !== r.id && x.item_id === it.id && ['pending', 'confirmed'].includes(x.status) && x.start_date <= to && x.end_date >= f);
         g('#esum').innerHTML = `${daysWord(n)}` + (clash ? `<br><span style="color:#8A2E0A;font-weight:700">Pozor, kříží se s rezervací ${esc(clash.customer_name)} (${esc(range(clash))}).</span>` : '') + closedWarn(f, to, it.id);
         return { it, f, to };
@@ -831,13 +843,14 @@ function newRes() {
       if (!f || !to || to < f) { g('#nsum').textContent = 'Zkontrolujte termín.'; return null; }
       const n = Math.round((pd(to) - pd(f)) / 86400000) + 1;
       const clash = S.res.find((x) => x.item_id === it.id && ['pending', 'confirmed'].includes(x.status) && x.start_date <= to && x.end_date >= f);
-      g('#nsum').innerHTML = `${daysWord(n)} · nájem <b>${kc(n * it.price)}</b> · kauce <b>${kc(it.deposit)}</b>` + (clash ? `<br><span style="color:#8A2E0A;font-weight:700">Pozor, kříží se s rezervací ${esc(clash.customer_name)} (${esc(range(clash))}).</span>` : '') + closedWarn(f, to, it.id);
+      const pcn = it.id === 'cistic' ? Math.max(0, Math.round(+g('#npc').value || 0)) : 0;
+      g('#nsum').innerHTML = `${daysWord(n)} · nájem <b>${kc(n * it.price)}</b>${pcn ? ` · prášky <b>${kc(pcn * POWDER)}</b>` : ''} · kauce <b>${kc(it.deposit)}</b>` + (clash ? `<br><span style="color:#8A2E0A;font-weight:700">Pozor, kříží se s rezervací ${esc(clash.customer_name)} (${esc(range(clash))}).</span>` : '') + closedWarn(f, to, it.id);
       return { it, f, to, n };
     };
     ['#ni', '#nf', '#nt'].forEach((s) => g(s).addEventListener('change', () => { if (g('#nt').value < g('#nf').value) g('#nt').value = g('#nf').value; calc(); }));
     livePhone(g('#np'));
     const powderToggle = () => { g('#npw').hidden = g('#ni').value !== 'cistic'; };
-    g('#ni').addEventListener('change', powderToggle); powderToggle();
+    g('#ni').addEventListener('change', powderToggle); powderToggle(); g('#npc').addEventListener('input', () => calc());
     calc();
     g('#nsave').onclick = async () => {
       const c = calc(); if (!c) return;
@@ -846,7 +859,7 @@ function newRes() {
         item_id: c.it.id, start_date: c.f, end_date: c.to, customer_name: g('#nn').value.trim(), phone: fmtPhone(g('#np').value),
         powder_count: c.it.id === 'cistic' && g('#npc').value !== '' ? Math.max(0, Math.round(+g('#npc').value)) : null,
         email: g('#ne').value.trim() || null, address: g('#na').value.trim() || null, note: g('#nno').value.trim() || null, delivery: g('#nd').checked, source: 'phone',
-        status: 'confirmed', rent_amount: c.n * c.it.price, deposit_amount: c.it.deposit,
+        status: 'confirmed', rent_amount: c.n * c.it.price + (c.it.id === 'cistic' ? Math.max(0, Math.round(+g('#npc').value || 0)) * POWDER : 0), deposit_amount: c.it.deposit,
       }).select().single();
       if (error) return toast('Uložení se nepovedlo: ' + error.message);
       S.res.push(data); S.res.sort((a, b) => a.start_date.localeCompare(b.start_date));
