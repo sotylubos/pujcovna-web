@@ -287,10 +287,10 @@ def index():
 <form class="form" id="resForm" novalidate>
 <div class="form-row">
 <label class="field">Jméno a příjmení<input name="name" type="text" autocomplete="name" required></label>
-<label class="field" style="flex-basis:150px">Telefon<input name="phone" type="tel" autocomplete="tel" required></label>
+<label class="field" style="flex-basis:150px">Telefon<input name="phone" type="tel" autocomplete="tel"></label>
 </div>
-<label class="field">E-mail<input name="email" type="email" autocomplete="email" required></label>
-<label class="field">Adresa (ulice, číslo, obec)<input name="address" type="text" autocomplete="street-address" required></label>
+<label class="field">E-mail (stačí telefon nebo e-mail)<input name="email" type="email" autocomplete="email"></label>
+<label class="field">Adresa (nepovinné)<input name="address" type="text" autocomplete="street-address"></label>
 <label class="hp" aria-hidden="true">Nevyplňujte<input name="web" type="text" tabindex="-1" autocomplete="off"></label>
 <label class="check"><input name="delivery" type="checkbox"> Chci to dovézt (cenu dopravy upřesníme)</label>
 <label class="field">Poznámka<textarea name="note" rows="3"></textarea></label>

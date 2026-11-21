@@ -164,9 +164,10 @@
     if (!st.item) return showErr(formErr, 'Vyberte, co si chcete půjčit.');
     if (!st.start) return showErr(formErr, 'Vyberte v kalendáři termín.');
     if (f.name.value.trim().length < 2) return showErr(formErr, 'Vyplňte jméno a příjmení.');
-    if (f.phone.value.replace(/\D/g, '').length < 9) return showErr(formErr, 'Vyplňte telefon, ať vám můžeme zavolat.');
-    if (!/^\S+@\S+\.\S+$/.test(f.email.value.trim())) return showErr(formErr, 'Zkontrolujte e-mail, pošleme na něj potvrzení.');
-    if (f.address.value.trim().length < 5) return showErr(formErr, 'Vyplňte adresu (ulice, číslo, obec).');
+    var ph = f.phone.value.replace(/\D/g, ''), em = f.email.value.trim();
+    if (!ph && !em) return showErr(formErr, 'Vyplňte telefon nebo e-mail, ať se vám můžeme ozvat.');
+    if (ph && ph.length < 9) return showErr(formErr, 'Zkontrolujte telefon, má mít 9 číslic.');
+    if (em && !/^\S+@\S+\.\S+$/.test(em)) return showErr(formErr, 'Zkontrolujte e-mail.');
     var btn = $('#resSubmit'); btn.disabled = true; btn.textContent = 'Odesílám…';
     api('rpc/pj_create_reservation', {
       p_item: st.item, p_start: st.start, p_end: st.end || st.start, p_name: f.name.value, p_email: f.email.value,
