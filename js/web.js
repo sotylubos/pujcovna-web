@@ -85,7 +85,7 @@
 
   function loadBusy() {
     if (!st.item) { render(); return; }
-    var from = new Date(st.y, st.m, 1), to = new Date(st.y, st.m + 2, 0);
+    var from = new Date(st.y, st.m, 1); if (from < today) from = today; var to = new Date(st.y, st.m + 2, 0);
     st.loading = true; render();
     api('rpc/pj_busy_days', { p_item: st.item, p_from: iso(from), p_to: iso(to) }).then(function (rows) {
       st.busy = {}; rows.forEach(function (r) { st.busy[typeof r === 'string' ? r : r.pj_busy_days] = true; });
@@ -119,6 +119,7 @@
       var date = new Date(st.y, st.m, d), s = iso(date), b = document.createElement('button');
       b.type = 'button'; b.className = 'day'; b.textContent = d;
       var past = date < today, busy = !!st.busy[s];
+      if (past) { var h = document.createElement('span'); h.className = 'day empty'; grid.appendChild(h); continue; }
       var sel = st.start && (st.end ? (s >= st.start && s <= st.end) : s === st.start);
       if (past) { b.classList.add('past'); b.disabled = true; }
       else if (busy) { b.classList.add('taken'); b.disabled = true; b.setAttribute('aria-label', d + '. obsazeno'); }
@@ -149,6 +150,12 @@
 
   $('#calPrev').addEventListener('click', function () { st.m--; if (st.m < 0) { st.m = 11; st.y--; } loadBusy(); });
   $('#calNext').addEventListener('click', function () { st.m++; if (st.m > 11) { st.m = 0; st.y++; } loadBusy(); });
+
+  form.elements.phone.addEventListener('input', function () {
+    var el = this, d = el.value.replace(/\D/g, '');
+    if (d.indexOf('00420') === 0) d = d.slice(5); else if (d.length > 9 && d.indexOf('420') === 0) d = d.slice(3);
+    if (d.length <= 9) el.value = d.replace(/(\d{3})(?=\d)/g, '$1 ').trim();
+  });
 
   form.addEventListener('submit', function (ev) {
     ev.preventDefault(); showErr(formErr, '');

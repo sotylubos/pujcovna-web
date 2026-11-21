@@ -14,6 +14,18 @@ const kc = (n) => String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' 
 const pd = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const dm = (s) => { const d = pd(s); return `${d.getDate()}. ${d.getMonth() + 1}.`; };
+const fmtPhone = (p) => {
+  if (!p) return '';
+  let d = String(p).replace(/\D/g, '');
+  if (d.startsWith('00420')) d = d.slice(5); else if (d.length === 12 && d.startsWith('420')) d = d.slice(3);
+  return d.length === 9 ? d.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3') : String(p).trim();
+};
+const livePhone = (el) => el.addEventListener('input', () => {
+  let d = el.value.replace(/\D/g, '');
+  if (d.startsWith('00420')) d = d.slice(5); else if (d.length > 9 && d.startsWith('420')) d = d.slice(3);
+  if (d.length <= 9) el.value = d.replace(/(\d{3})(?=\d)/g, '$1 ').trim();
+});
+const powderLine = (r) => r.item_id === 'cistic' ? `Počet prášků: ${r.powder_count != null ? r.powder_count : '[doplňte]'}\n` : '';
 const dmy = (s) => { const d = pd(s); return `${d.getDate()}. ${d.getMonth() + 1}. ${d.getFullYear()}`; };
 const WD = ['ne', 'po', 'út', 'st', 'čt', 'pá', 'so'];
 const wd = (s) => WD[pd(s).getDay()];
@@ -153,7 +165,7 @@ const sign = `\n\nS pozdravem\n${FIRM.owner}\n${FIRM.name}\n${FIRM.phone}\n${FIR
 const T = {
   confirm: (r) => ({
     subject: `Potvrzení rezervace ${r.code} – ${itemName(r.item_id)}`,
-    body: `Dobrý den,\n\npotvrzujeme Vaši rezervaci.\n\n${itemName(r.item_id)}\nTermín: ${dmy(r.start_date)}${r.end_date !== r.start_date ? ' – ' + dmy(r.end_date) : ''} (${daysWord(nDays(r))})\nNájem: ${kc(r.rent_amount)}\nVratná kauce: ${kc(r.deposit_amount)} (platí se při převzetí, vrátíme ji při vrácení)\n\n${r.delivery ? 'Doprava: domluvíme telefonicky.' : 'Místo převzetí: ' + FIRM.addr}\nČas předání: [doplňte]\n\nS sebou si prosím vezměte doklad totožnosti. Zaplatit můžete hotově nebo QR kódem při převzetí.` + sign,
+    body: `Dobrý den,\n\npotvrzujeme Vaši rezervaci.\n\n${itemName(r.item_id)}\nTermín: ${dmy(r.start_date)}${r.end_date !== r.start_date ? ' – ' + dmy(r.end_date) : ''} (${daysWord(nDays(r))})\n${powderLine(r)}Nájem: ${kc(r.rent_amount)}\nVratná kauce: ${kc(r.deposit_amount)} (platí se při převzetí, vrátíme ji při vrácení)\n\n${r.delivery ? 'Doprava: domluvíme telefonicky.' : 'Místo převzetí: ' + FIRM.addr}\nČas předání: [doplňte]\n\nS sebou si prosím vezměte doklad totožnosti. Zaplatit můžete hotově nebo QR kódem při převzetí.` + sign,
   }),
   reject: (r) => ({
     subject: `Rezervace ${r.code} – ${itemName(r.item_id)}`,
@@ -161,7 +173,7 @@ const T = {
   }),
   depositIn: (r) => ({
     subject: `Potvrzení o převzetí kauce – rezervace ${r.code}`,
-    body: `Dobrý den,\n\npotvrzujeme, že jsme dne ${nowCz()} od Vás převzali vratnou kauci ve výši ${kc(r.deposit_amount)}.\n\nZapůjčeno: ${itemName(r.item_id)}\nNájemce: ${r.customer_name}${r.address ? ', ' + r.address : ''}\nTermín: ${dmy(r.start_date)}${r.end_date !== r.start_date ? ' – ' + dmy(r.end_date) : ''}\nČíslo rezervace: ${r.code}\n\nKauci Vám vrátíme při vrácení zapůjčené věci v pořádku.` + sign + `\nIČ ${FIRM.ico}, ${FIRM.addr}`,
+    body: `Dobrý den,\n\npotvrzujeme, že jsme dne ${nowCz()} od Vás převzali vratnou kauci ve výši ${kc(r.deposit_amount)}.\n\nZapůjčeno: ${itemName(r.item_id)}\nNájemce: ${r.customer_name}${r.address ? ', ' + r.address : ''}\nTermín: ${dmy(r.start_date)}${r.end_date !== r.start_date ? ' – ' + dmy(r.end_date) : ''}\nČíslo rezervace: ${r.code}\n${powderLine(r)}\nKauci Vám vrátíme při vrácení zapůjčené věci v pořádku.` + sign + `\nIČ ${FIRM.ico}, ${FIRM.addr}`,
   }),
   depositOut: (r) => {
     const rent = r.paid_status === 'deposit' ? r.rent_amount : 0, ret = r.deposit_retained || 0, back = r.deposit_amount - rent - ret;
@@ -181,10 +193,18 @@ function mailSheet(r, kind, title) {
   const t = T[kind](r);
   sheet(`<h3>${esc(title)}</h3>
     <p class="muted" style="margin:0">Pro: ${esc(r.email)}</p>
+    ${r.item_id === 'cistic' && kind !== 'reject' && kind !== 'depositOut' ? `<label class="f">Počet prášků<input id="mp" type="number" inputmode="numeric" min="0" value="${r.powder_count != null ? r.powder_count : ''}" placeholder="doplňte číslo"></label>` : ''}
     <label class="f">Předmět<input id="ms" value="${esc(t.subject)}"></label>
     <label class="f">Text<textarea id="mb">${esc(t.body)}</textarea></label>
     <div class="actions"><button class="btn primary" id="send">Otevřít v e-mailu</button><button class="btn ghost" id="cp">Kopírovat</button><button class="btn ghost" data-close>Teď ne</button></div>`,
   (el) => {
+    const mp = el.querySelector('#mp');
+    if (mp) mp.addEventListener('change', async () => {
+      const n = mp.value === '' ? null : Math.max(0, Math.round(+mp.value));
+      const mb = el.querySelector('#mb');
+      mb.value = mb.value.replace(/^Počet prášků:.*$/m, `Počet prášků: ${n != null ? n : '[doplňte]'}`);
+      await patch(r, { powder_count: n });
+    });
     el.querySelector('#send').onclick = () => {
       location.href = `mailto:${encodeURIComponent(r.email)}?subject=${encodeURIComponent(el.querySelector('#ms').value)}&body=${encodeURIComponent(el.querySelector('#mb').value)}`;
       closeSheet();
@@ -501,6 +521,7 @@ const ACT = {
       <label class="f">Telefon<input id="ep" type="tel" value="${esc(r.phone || '')}"></label>
       <label class="f">E-mail<input id="ee" type="email" value="${esc(r.email || '')}"></label>
       <label class="f">Adresa<input id="ea" autocomplete="off" value="${esc(r.address || '')}"></label>
+      <label class="f" id="epw"${r.item_id === 'cistic' ? '' : ' hidden'}>Počet prášků<input id="epc" type="number" inputmode="numeric" min="0" placeholder="doplňte číslo" value="${r.powder_count != null ? r.powder_count : ''}"></label>
       <label style="display:flex;gap:10px;align-items:center;min-height:44px"><input id="ed" type="checkbox" style="width:20px;height:20px"${r.delivery ? ' checked' : ''}> Dovoz</label>
       <div style="display:flex;gap:10px"><label class="f" style="flex:1">Nájem (Kč)<input id="er" type="number" inputmode="numeric" min="0" value="${r.rent_amount}"></label><label class="f" style="flex:1">Kauce (Kč)<input id="ek" type="number" inputmode="numeric" min="0" value="${r.deposit_amount}"></label></div>
       <label class="f">Poznámka zákazníka<textarea id="eno" style="min-height:80px">${esc(r.note || '')}</textarea></label>
@@ -509,6 +530,9 @@ const ACT = {
     (el) => {
       const g = (id) => el.querySelector(id);
       let manual = false;
+      livePhone(g('#ep'));
+      const powderToggle = () => { g('#epw').hidden = g('#ei').value !== 'cistic'; };
+      g('#ei').addEventListener('change', powderToggle);
       ['#er', '#ek'].forEach((q) => g(q).addEventListener('input', () => { manual = true; }));
       const check = (recalc) => {
         const it = S.items.find((i) => i.id === g('#ei').value), f = g('#ef').value, to = g('#et').value;
@@ -523,14 +547,14 @@ const ACT = {
       check(false);
       g('#esave').onclick = async () => {
         const c = check(false); if (!c) return;
-        const name = g('#en').value.trim(), phone = g('#ep').value.trim();
+        const name = g('#en').value.trim(), phone = fmtPhone(g('#ep').value);
         if (name.length < 2) return toast('Vyplňte jméno');
         if (phone.length < 6) return toast('Vyplňte telefon');
         const rent = Math.round(+g('#er').value), dep = Math.round(+g('#ek').value);
         if (!(rent >= 0) || !(dep >= 0)) return toast('Zkontrolujte částky');
         closeSheet();
         await patch(r, { item_id: c.it.id, start_date: c.f, end_date: c.to, customer_name: name, phone, email: g('#ee').value.trim() || null,
-          address: g('#ea').value.trim() || null, delivery: g('#ed').checked, rent_amount: rent, deposit_amount: dep, note: g('#eno').value.trim() || null }, 'Změny uloženy');
+          address: g('#ea').value.trim() || null, delivery: g('#ed').checked, powder_count: c.it.id === 'cistic' && g('#epc').value !== '' ? Math.max(0, Math.round(+g('#epc').value)) : null, rent_amount: rent, deposit_amount: dep, note: g('#eno').value.trim() || null }, 'Změny uloženy');
       };
     });
   },
@@ -572,7 +596,7 @@ function card(r) {
     `<button class="btn ghost" data-a="back">Vráceno</button><button class="btn ghost" data-a="cancel">Storno</button>`;
   else if (r.status === 'rejected' || r.status === 'cancelled') acts = `<button class="btn ghost" data-a="purge">Smazat úplně</button>`;
   else if (r.status === 'returned') acts = `<button class="btn ghost" data-a="paid">Platba</button><button class="btn ghost" data-a="depFix">Kauce</button><button class="btn accent" data-a="unreturn">Vrátit zpět do půjčeno</button>`;
-  const contact = [r.phone && `<a href="tel:${esc(r.phone.replace(/\s/g, ''))}">${esc(r.phone)}</a>`, r.email && `<a href="mailto:${esc(r.email)}">${esc(r.email)}</a>`].filter(Boolean).join('');
+  const contact = [r.phone && `<a href="tel:${esc(r.phone.replace(/\s/g, ''))}">${esc(fmtPhone(r.phone))}</a>`, r.email && `<a href="mailto:${esc(r.email)}">${esc(r.email)}</a>`].filter(Boolean).join('');
   return `<article class="card" data-id="${r.id}">
     <div class="row"><div><p class="item">${esc(itemName(r.item_id))}</p><div class="dates">${esc(range(r))} <span class="muted" style="font-weight:500">· ${daysWord(n)}</span></div></div><span class="code">#${esc(r.code)}</span></div>
     <div class="who"><b>${esc(r.customer_name)}</b>${contact}</div>
@@ -658,7 +682,7 @@ function viewPrehled() {
     list += `<button class="card ov" data-open="${r.id}" style="padding:10px 14px;margin-bottom:6px;text-align:left;border:0;width:100%;cursor:pointer;gap:4px">
       <div style="display:flex;justify-content:space-between;gap:10px"><b>${esc(r.customer_name)}</b><b>${kc(r.rent_amount)}</b></div>
       <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><span>${esc(itemName(r.item_id))} · ${esc(range(r))} <span class="muted">(${daysWord(nDays(r))})</span></span><span class="tag ${cls}">${STL[r.status]}</span></div>
-      ${r.phone ? `<div class="muted" style="font-size:13px">${esc(r.phone)}${r.delivery ? ' · dovoz' : ''}</div>` : ''}</button>`;
+      ${r.phone ? `<div class="muted" style="font-size:13px">${esc(fmtPhone(r.phone))}${r.delivery ? ' · dovoz' : ''}</div>` : ''}</button>`;
   });
   return `<h2>Přehled</h2><div class="seg">${stChips}</div><div class="seg">${itChips}</div>
     <input id="ovq" type="search" placeholder="Hledat jméno, telefon, e-mail, kód…" value="${esc(o.q)}" style="width:100%;margin-bottom:12px;min-height:44px;border:1.5px solid #CFCAC0;border-radius:12px;padding:0 14px;font:inherit;background:#fff">
@@ -793,6 +817,7 @@ function newRes() {
     <div style="display:flex;gap:10px"><label class="f" style="flex:1">Od<input id="nf" type="date" value="${t}"></label><label class="f" style="flex:1">Do<input id="nt" type="date" value="${t}"></label></div>
     <label class="f">Jméno<input id="nn" autocomplete="off"></label>
     <label class="f">Telefon<input id="np" type="tel"></label>
+    <label class="f" id="npw" hidden>Počet prášků<input id="npc" type="number" inputmode="numeric" min="0" placeholder="doplňte číslo"></label>
     <label class="f">E-mail (nepovinné)<input id="ne" type="email"></label>
     <label class="f">Adresa (nepovinné)<input id="na" autocomplete="off"></label>
     <label style="display:flex;gap:10px;align-items:center;min-height:44px"><input id="nd" type="checkbox" style="width:20px;height:20px"> Dovoz</label>
@@ -810,12 +835,16 @@ function newRes() {
       return { it, f, to, n };
     };
     ['#ni', '#nf', '#nt'].forEach((s) => g(s).addEventListener('change', () => { if (g('#nt').value < g('#nf').value) g('#nt').value = g('#nf').value; calc(); }));
+    livePhone(g('#np'));
+    const powderToggle = () => { g('#npw').hidden = g('#ni').value !== 'cistic'; };
+    g('#ni').addEventListener('change', powderToggle); powderToggle();
     calc();
     g('#nsave').onclick = async () => {
       const c = calc(); if (!c) return;
       if (g('#nn').value.trim().length < 2 || g('#np').value.trim().length < 6) return toast('Vyplňte jméno a telefon');
       const { data, error } = await sb.from('pj_reservations').insert({
-        item_id: c.it.id, start_date: c.f, end_date: c.to, customer_name: g('#nn').value.trim(), phone: g('#np').value.trim(),
+        item_id: c.it.id, start_date: c.f, end_date: c.to, customer_name: g('#nn').value.trim(), phone: fmtPhone(g('#np').value),
+        powder_count: c.it.id === 'cistic' && g('#npc').value !== '' ? Math.max(0, Math.round(+g('#npc').value)) : null,
         email: g('#ne').value.trim() || null, address: g('#na').value.trim() || null, note: g('#nno').value.trim() || null, delivery: g('#nd').checked, source: 'phone',
         status: 'confirmed', rent_amount: c.n * c.it.price, deposit_amount: c.it.deposit,
       }).select().single();
