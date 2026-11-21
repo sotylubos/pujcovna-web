@@ -31,7 +31,7 @@ const powderLine = (r) => r.item_id === 'cistic' ? `Počet prášků: ${r.powder
 const rentBlock = (r) => {
   const pc = pcOf(r);
   if (!pc) return `${powderLine(r)}Nájem: ${kc(r.rent_amount)}\n`;
-  return `Nájem: ${kc(r.rent_amount - pc * POWDER)}\nPočet prášků: ${pc} × ${POWDER} Kč = ${kc(pc * POWDER)}\nCelkem za půjčení: ${kc(r.rent_amount)} (účtujeme při vrácení)\n`;
+  return `Nájem: ${kc(r.rent_amount - pc * POWDER)}\nPrášky: ${pc} × ${POWDER} Kč = ${kc(pc * POWDER)} (nepoužité prášky při vrácení neúčtujeme)\nCelkem za půjčení při spotřebování všech prášků: ${kc(r.rent_amount)} (účtujeme při vrácení)\n`;
 };
 const dmy = (s) => { const d = pd(s); return `${d.getDate()}. ${d.getMonth() + 1}. ${d.getFullYear()}`; };
 const WD = ['ne', 'po', 'út', 'st', 'čt', 'pá', 'so'];
@@ -188,7 +188,7 @@ const T = {
     if (!rent && !ret) t = `Potvrzujeme, že jsme Vám dne ${nowCz()} vrátili celou kauci ${kc(r.deposit_amount)}.`;
     else {
       t = `Vyúčtování kauce ${kc(r.deposit_amount)}:\n`;
-      if (rent) t += pcOf(r) ? `– nájem ${itemName(r.item_id)} (${daysWord(nDays(r))}): ${kc(rent - pcOf(r) * POWDER)}\n– prášky ${pcOf(r)} × ${POWDER} Kč: ${kc(pcOf(r) * POWDER)}\n` : `– nájem ${itemName(r.item_id)} (${daysWord(nDays(r))}): ${kc(rent)}\n`;
+      if (rent) { const pu = pcOf(r) - (r.powder_returned || 0); t += pcOf(r) ? `– nájem ${itemName(r.item_id)} (${daysWord(nDays(r))}): ${kc(rent - pu * POWDER)}\n– prášky: ${pu} × ${POWDER} Kč = ${kc(pu * POWDER)}${r.powder_returned ? ` (nepoužitých ${r.powder_returned} ks jste vrátil/a)` : ''}\n` : `– nájem ${itemName(r.item_id)} (${daysWord(nDays(r))}): ${kc(rent)}\n`; }
       if (ret) t += `– ponecháno z důvodu: ${r.deposit_retained_reason || '[doplňte]'}: ${kc(ret)}\n`;
       t += `\nDne ${nowCz()} jsme Vám vrátili ${kc(back)}.`;
     }
@@ -421,24 +421,30 @@ const ACT = {
     const canDeduct = hasDep && !['cash', 'qr_onsite', 'transfer'].includes(r.paid_status);
     sheet(`<h3>Vráceno: ${esc(itemName(r.item_id))}</h3>
     ${hasDep ? `<p style="margin:0">Kauce u nás: <b>${esc(kc(r.deposit_amount))}</b> · nájem ${esc(kc(r.rent_amount))} ${r.paid_status === 'unpaid' || r.paid_status === 'deposit' ? '<span class="muted">(nezaplacen)</span>' : `<span class="muted">(${esc(PAID[r.paid_status].toLowerCase())})</span>`}</p>` : `<p class="muted" style="margin:0">Kauce nebyla převzata.</p>`}
-    ${canDeduct ? `<label style="display:flex;gap:10px;align-items:center;min-height:44px;font-weight:600"><input id="ded" type="checkbox" style="width:22px;height:22px"${r.paid_status !== 'unpaid' || r.deposit_amount >= r.rent_amount ? ' checked' : ''}> Strhnout nájem ${esc(kc(r.rent_amount))} z kauce</label>` : ''}
+    ${pcOf(r) ? `<label class="f">Vráceno nepoužitých prášků (z ${pcOf(r)}, à ${POWDER} Kč)<input id="pr" type="number" inputmode="numeric" min="0" max="${pcOf(r)}" placeholder="0" value="${r.powder_returned || ''}"></label>` : ''}
+    ${canDeduct ? `<label style="display:flex;gap:10px;align-items:center;min-height:44px;font-weight:600"><input id="ded" type="checkbox" style="width:22px;height:22px"${r.paid_status !== 'unpaid' || r.deposit_amount >= r.rent_amount ? ' checked' : ''}> Strhnout nájem <span id="rentv">${esc(kc(r.rent_amount))}</span> z kauce</label>` : ''}
     ${hasDep ? `<label class="f">Ponechat si navíc kvůli škodě (Kč)<input id="ret" type="number" inputmode="numeric" min="0" max="${r.deposit_amount}" placeholder="0"></label>
     <label class="f" id="whyw" style="display:none">Důvod<input id="why" placeholder="např. poškozená klouzačka"></label>
     <div class="card" style="background:var(--gsoft);margin:0;padding:12px 14px"><span class="muted">Vracíte zákazníkovi</span><b id="back" style="font-family:var(--head);font-size:28px"></b></div>` : ''}
     <div class="actions"><button class="btn primary" id="ok">Uložit vrácení</button><button class="btn ghost" data-close>Zrušit</button></div>`,
     (el) => {
       const g = (q) => el.querySelector(q);
+      const prv = () => Math.min(pcOf(r), Math.max(0, Math.round(+(g('#pr')?.value) || 0)));
+      const rentNow = () => r.rent_amount - prv() * POWDER;
       const calc = () => {
+        if (g('#rentv')) g('#rentv').textContent = kc(rentNow());
         if (!hasDep) return null;
-        const ded = g('#ded')?.checked ? r.rent_amount : 0, ret = Math.round(+g('#ret').value || 0);
+        const ded = g('#ded')?.checked ? rentNow() : 0, ret = Math.round(+g('#ret').value || 0);
         g('#whyw').style.display = ret > 0 ? 'flex' : 'none';
         const back = r.deposit_amount - ded - ret;
         g('#back').textContent = kc(back); g('#back').style.color = back < 0 ? 'var(--warn)' : '';
         return { ded, ret, back };
       };
+      g('#pr')?.addEventListener('input', calc);
       if (hasDep) { g('#ret').addEventListener('input', calc); g('#ded')?.addEventListener('change', calc); calc(); }
       g('#ok').onclick = async () => {
         const f = { status: 'returned', deposit_returned_at: new Date().toISOString(), deposit_retained: 0, deposit_retained_reason: null };
+        if (pcOf(r)) { f.powder_returned = prv(); f.rent_amount = rentNow(); }
         if (hasDep) {
           const c = calc(), why = g('#why').value.trim();
           if (c.back < 0) return toast('Stržená částka je vyšší než kauce');
@@ -456,6 +462,7 @@ const ACT = {
   unreturn: async (r) => {
     if (!confirm('Vrátit rezervaci zpět do „Půjčeno“? Kauce se vrátí do stavu „u nás“.')) return;
     await patch(r, { status: 'confirmed', deposit_returned_at: null, deposit_retained: 0, deposit_retained_reason: null,
+      ...(r.powder_returned ? { rent_amount: r.rent_amount + r.powder_returned * POWDER, powder_returned: null } : {}),
       deposit_status: ['returned', 'partial'].includes(r.deposit_status) ? 'received' : r.deposit_status,
       ...(r.paid_status === 'deposit' ? { paid_status: 'unpaid', paid_at: null } : {}) }, 'Vráceno zpět do půjčeno');
   },
